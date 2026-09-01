@@ -9,7 +9,17 @@
 # no api/state-store.js), so this image cannot build against it at all yet, MCP
 # service aside. Once !86 merges, change this default to `main` (or a release tag)
 # and drop this comment.
-ARG BUILD_FROM
+#
+# BUILD_FROM needs a real default here: the home-assistant/builder composite actions
+# (actions/build-image) only inject BUILD_ARCH/BUILD_VERSION as build-args, never
+# BUILD_FROM — reading base images from build.yaml is the deprecated path (the
+# home-assistant/actions info helper prints "build.yaml is deprecated, move base
+# image ... to Dockerfile" and never wires build_from into the build at all in this
+# newer toolchain). Left blank, ${BUILD_FROM} resolved to nothing and every CI build
+# failed with "base name (${BUILD_FROM}) should not be blank". `ghcr.io/home-assistant/base`
+# is HA's current multi-arch (amd64+aarch64) Alpine base — a single tag resolves the
+# right platform automatically on each matrix runner, no per-arch selection needed.
+ARG BUILD_FROM=ghcr.io/home-assistant/base:3.24
 ARG OPENGYM_REF=ebd49888f53e56806c11e4ce4dae2c0b6aabd619
 
 FROM node:22-alpine AS source
