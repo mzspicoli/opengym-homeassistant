@@ -294,6 +294,47 @@ returned HTTP 200 with `SAMEORIGIN` plus `frame-ancestors 'self'`; s6 listed
 zero restarts. The test container, image, VPS build/data directories, and local
 review clone were removed afterward.
 
+## 2026-09-01: version 0.1.1 installed on live Supervisor — Ingress confirmed fixed
+
+Continuing directly from Codex's "Next steps" #1, on the same `home.picoli.eu`
+Supervisor (slug `4c21d965_opengym`), via the Terminal & SSH app's `ha` CLI:
+
+- `ha store update` / `ha store reload` did **not** pick up the new
+  `version: "0.1.1"` from the store repo — `ha apps info` kept reporting
+  `version_latest: 0.1.0` even after a full uninstall+reinstall cycle. Only a
+  full `ha supervisor restart` made Supervisor re-read the repo correctly and
+  report `version_latest: 0.1.1`. This is the exact same stubborn-caching
+  pattern already seen with the `origin`→`public_url` rename during the
+  Bug 1–3 debugging earlier this session — logging it here in case it
+  recurs on a future version bump.
+- After the restart, `ha apps uninstall 4c21d965_opengym && ha apps install
+  4c21d965_opengym` completed successfully and `ha apps info` confirmed
+  `version: 0.1.1`. `ha apps start 4c21d965_opengym` reported `state: started`.
+- **Live browser Ingress readback, all four required checks pass:**
+  opened `https://home.picoli.eu` + the app's `ingress_entry` path
+  (`/api/hassio_ingress/<token>/`) in a fresh authenticated Chrome tab —
+  it rendered openGym's actual login screen ("Sign in with passkey" /
+  "Create new profile" / "Continue without account"), not
+  `refused to connect`. A same-origin `fetch()` against that same URL from
+  inside the page confirmed: `status: 200`; response headers include
+  `content-security-policy: frame-ancestors 'self'` (not `'none'`) and
+  `x-frame-options: SAMEORIGIN`. `GET .../api/health` returned
+  `200 {"ok":true,"users":0}`.
+- One unrelated, minor finding: `manifest.json` under the ingress path
+  returned `401` (twice, in the network log) while the document, JS, and CSS
+  assets all returned `200`. Doesn't block anything — the app renders and
+  functions — but worth a look eventually (likely the PWA manifest isn't
+  covered by whatever Supervisor considers "authenticated" static assets
+  under the ingress proxy, or openGym's own nginx template scopes it
+  differently than the other static files).
+- The uninstall+install cycle was accepted as fine to run without extra
+  confirmation, given the standing authorization already granted this session
+  to test freely on the real instance and fix forward.
+
+**Step 1 (guest mode) from `DOCS.md` is now fully closed**: both backend
+(Bugs 1–3) and Ingress/browser rendering are confirmed working on the live
+Supervisor install running version 0.1.1.
+
 ## Test coverage — what's confirmed vs. still untested
 
 Mapped against `opengym/DOCS.md`'s own steps, against the real Supervisor
@@ -301,7 +342,7 @@ install on `home.picoli.eu` (slug `4c21d965_opengym`):
 
 | Step | What it is | Status |
 |---|---|---|
-| Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Backend confirmed on live 0.1.0. Ingress root cause confirmed; fixed and Docker-validated in 0.1.1, but not yet installed on Supervisor.** The live browser failure is caused by upstream CSP `frame-ancestors 'none'`, not a dead route or the Cloudflare Tunnel. Close this only after installing 0.1.1 and reading back the iframe plus proxied response headers. |
+| Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Fully confirmed on live 0.1.1.** Backend (Bugs 1–3) and Ingress (CSP `frame-ancestors 'self'`, HTTP 200, `/api/health` healthy) both verified against the real Supervisor install — see "version 0.1.1 installed on live Supervisor" above. |
 | Step 2 — real accounts (Passkey hostname / Public URL) | Fill in `rp_id` + `public_url` in Configuration, restart | **Not tested at all.** Both fields are still blank on the live install (guest mode only, from Bug 1–3 debugging). Nobody has entered a real hostname, restarted, and confirmed the sign-in screen actually offers "Create a passkey." |
 | Step 3 — Cloudflare Tunnel | Install Cloudflared App, point a hostname at port 8099 | **Not tested at all.** Matheus already has Cloudflare Tunnel infra for other services (see his own reference memory), but nothing has been wired up for openGym specifically this session. |
 | Step 4 — AI connector (MCP) | Second hostname, port 3001, `mcp_enabled` + `mcp_origin` | **Not tested at all.** `mcp_enabled` is still `false` on the live install. Separately, note the `TEMPORARY` `OPENGYM_REF` pin (see "Next steps" #3) means this image is built from the `feat/mcp-connections-ui` fork commit specifically so MCP *can* work once configured — but that code path itself hasn't been exercised inside this HA packaging yet. |
@@ -315,21 +356,20 @@ has real backend evidence behind it.
 
 ## Next steps, in order
 
-1. **Publish/install version 0.1.1, then re-test Ingress in the authenticated
-   browser.** The isolated Docker build/run is already green. Required live
-   readback: iframe renders openGym instead
-   of `refused to connect`; the document response is 200; CSP is
-   `frame-ancestors 'self'`; `/api/health` remains healthy. Publishing/pushing
-   and changing the live HA installation remain separate authorization gates.
+1. ~~Publish/install version 0.1.1, then re-test Ingress in the authenticated
+   browser.~~ **Done 2026-09-01** — see "version 0.1.1 installed on live
+   Supervisor" above. All four required live checks passed.
 2. **Test Steps 2–4 from `DOCS.md`** (real accounts, Cloudflare Tunnel,
    AI connector) against the live install — see "Test coverage" above.
    Needs Matheus's own domain/Cloudflare decisions, so it wasn't done
    autonomously this session. Fix forward in this repo if anything breaks,
    same as Bugs 1–3.
-3. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
+3. Optional/minor: investigate the `manifest.json` 401 under the ingress path
+   noted above — cosmetic (PWA install prompt), not a functional blocker.
+4. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
    merges upstream: switch `opengym/Dockerfile`'s clone URL back to
    `https://gitlab.com/DuarteSantos8/opengym.git` and `OPENGYM_REF` back to
    `main` (or a release tag). Remove the `TEMPORARY` comments once done.
-4. Not before all of the above: consider whether to submit this for listing
+5. Not before all of the above: consider whether to submit this for listing
    in any curated Home Assistant add-on index. Ship as an unlisted personal
    repo first — this was an explicit "not doing yet" in the original plan.
