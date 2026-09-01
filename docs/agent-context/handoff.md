@@ -249,6 +249,15 @@ The test container, image tag, temporary build context, and temporary data
 directory were all removed afterward and their absence was read back. No
 production container, route, data, or Home Assistant installation was changed.
 
+Post-build live Chrome readback, before publication/installation of 0.1.1:
+the authenticated HA page still rendered `home.picoli.eu refused to connect`
+inside the openGym iframe. Opening that exact Ingress URL directly returned
+HTTP 200 with title `openGym`; its live headers remained
+`X-Frame-Options: SAMEORIGIN` plus CSP `frame-ancestors 'none'`. This confirms
+the live Supervisor is still serving the old image and cleanly separates the
+green 0.1.1 candidate evidence from deployment evidence. No browser setting or
+HA configuration was changed during this read-only test.
+
 ## 2026-09-01: Store assets added locally
 
 `opengym/icon.png` (128x128) and `opengym/logo.png` (250x100) now exist and
