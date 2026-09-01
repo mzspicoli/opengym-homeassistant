@@ -32,14 +32,27 @@ options:
   mcp_enabled: false
 schema:
   rp_id: str?
-  # url? (not str?) rejects the app's own Configuration form: the Supervisor's
-  # schema-driven options UI submits "" for any field left blank rather than
-  # omitting the key, and voluptuous's url? does not accept "" as "absent" —
-  # it fails the whole save with "expected a URL" even though blank is this
-  # option's own documented default (Step 1, guest mode). str? accepts "";
-  # the actual URL shape is validated where it's used (openGym's own runtime,
-  # and indirectly by @simplewebauthn's RP config), same as origin already was.
-  origin: str?
+  # str? (not url?): the Supervisor's schema-driven Configuration form submits
+  # "" for any field left blank rather than omitting the key, and voluptuous's
+  # url? does not accept "" as "absent" — it fails the whole save with
+  # "expected a URL" even though blank is this option's own documented default
+  # (Step 1, guest mode). str? accepts ""; the actual URL shape is validated
+  # where it's used (openGym's own runtime, and indirectly by
+  # @simplewebauthn's RP config).
+  #
+  # Renamed from "origin" to "public_url": with the field literally named
+  # "origin", real-Supervisor testing showed the Supervisor kept enforcing
+  # "expected a URL" on save no matter what schema type this file declared —
+  # confirmed unchanged after `ha store reload`, uninstall+reinstall, and a
+  # full `ha supervisor restart`, while the identically-shaped mcp_origin
+  # field picked up the str? fix immediately from the same edit. The most
+  # likely explanation is that "origin" gets special-cased somewhere in the
+  # Supervisor's own validation/network layer (a CORS-adjacent reserved name),
+  # independent of what this app's schema says. Renaming the option key sits
+  # entirely on the app side (the env var, translations label, and Configuration
+  # UI still say "Public URL" either way) and sidesteps whatever that
+  # special-casing is, rather than fighting an undocumented Supervisor behavior.
+  public_url: str?
   rp_name: str
   admin_uids: str?
   invite_only: bool

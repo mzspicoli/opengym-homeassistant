@@ -9,7 +9,7 @@ export DATA_DIR=/data
 export RP_NAME="$(bashio::config 'rp_name')"
 
 if bashio::config.has_value 'rp_id'; then export RP_ID="$(bashio::config 'rp_id')"; fi
-if bashio::config.has_value 'origin'; then export ORIGIN="$(bashio::config 'origin')"; fi
+if bashio::config.has_value 'public_url'; then export ORIGIN="$(bashio::config 'public_url')"; fi
 if bashio::config.has_value 'admin_uids'; then export ADMIN_UIDS="$(bashio::config 'admin_uids')"; fi
 if bashio::config.true 'invite_only'; then export INVITE_ONLY=1; fi
 if ! bashio::config.true 'allow_guest'; then export ALLOW_GUEST=0; fi

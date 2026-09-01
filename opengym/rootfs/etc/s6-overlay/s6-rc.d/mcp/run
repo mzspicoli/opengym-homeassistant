@@ -17,7 +17,7 @@ if ! bashio::config.has_value 'mcp_origin'; then
     exec sleep infinity
 fi
 
-ORIGIN="$(bashio::config 'origin')"
+ORIGIN="$(bashio::config 'public_url')"
 MCP_ORIGIN="$(bashio::config 'mcp_origin')"
 
 export PORT=3001
