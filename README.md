@@ -62,8 +62,9 @@ Once it is, this needs to switch back to pulling from
 Home Assistant Supervisor. That test found and fixed three Supervisor-only
 configuration bugs. The remaining Ingress iframe failure has also been traced
 to upstream's `frame-ancestors 'none'` header and fixed locally in packaging
-version 0.1.1; that image still needs to be built, installed, and read back in
-a browser before guest mode is fully confirmed. See the handoff for exact
+version 0.1.1. That image now passes an isolated real Docker build/run; it
+still needs to be published, installed on Supervisor, and read back in a
+browser before guest mode is fully confirmed. See the handoff for exact
 evidence and the remaining Steps 2–4 tests.
 
 ## License

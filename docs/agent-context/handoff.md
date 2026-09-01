@@ -14,12 +14,13 @@ against the actual Supervisor (none of them reproduced in Docker-only
 testing). The remaining Ingress failure is now diagnosed precisely: the
 packaged upstream nginx template returns `Content-Security-Policy:
 frame-ancestors 'none'`, so the browser correctly refuses HA's iframe even
-though the endpoint itself returns 200. A packaging-only fix exists locally
-in version `0.1.1`; it still needs a real image build/install and browser
-readback before Step 1 is closed.
+though the endpoint itself returns 200. The packaging-only fix in version
+`0.1.1` now passes a real isolated Docker build/run on the VPS; it still needs
+installation on the real Supervisor and browser readback before Step 1 is
+closed.
 
 All files exist and are internally consistent (see root `README.md` for the
-map). Two independent real-Docker builds on the VPS (not just read-through)
+map). Three independent real-Docker builds on the VPS (not just read-through)
 confirmed the image builds and the three services (`api`, `web`, `mcp`) come
 up correctly under s6-overlay — see "Verified" below.
 
@@ -216,7 +217,7 @@ Ingress. The response also carried `X-Frame-Options: SAMEORIGIN` after the
 Supervisor proxy, which is compatible with HA; CSP's stricter `none` directive
 is what wins in the browser.
 
-Local packaging fix (not yet built or installed):
+Packaging fix (built and run in isolation; not yet installed on Supervisor):
 
 - `opengym/Dockerfile` rewrites upstream's framing headers to
   `X-Frame-Options: SAMEORIGIN` and CSP `frame-ancestors 'self'` while it
@@ -231,11 +232,22 @@ Local packaging fix (not yet built or installed):
   three CSP occurrences became `frame-ancestors 'self'`, and no `none`
   occurrence remained. `git diff --check` also passes.
 
-A real Docker build was not run in this continuation because Docker is absent
-on the Mac. The proposed isolated VPS build would copy the local build context
-to a temporary VPS directory and use the sudo credential from the Mac
-Keychain; that higher-authority action was not approved, so no remote files,
-images, containers, or production services were changed.
+After Matheus explicitly authorized the isolated VPS build, commit `910d03d`'s
+`opengym/` context was copied to a temporary directory and built as
+`opengym-ha-app:ingress-test-910d03d`. The real build completed successfully,
+including the new framing-header assertions. An ephemeral container bound only
+to VPS loopback port `18099` then proved:
+
+- `GET /api/health` returned `{"ok":true,"users":0}`.
+- `GET /` returned HTTP 200, `<title>openGym`, and `id="root"`.
+- Response headers were exactly `X-Frame-Options: SAMEORIGIN` and
+  `Content-Security-Policy: frame-ancestors 'self'`.
+- `s6-rc -a list` included `api`, `mcp`, `web`, and `media-init`; container
+  status was `running true 0` (running, zero restarts).
+
+The test container, image tag, temporary build context, and temporary data
+directory were all removed afterward and their absence was read back. No
+production container, route, data, or Home Assistant installation was changed.
 
 ## 2026-09-01: Store assets added locally
 
@@ -261,7 +273,7 @@ install on `home.picoli.eu` (slug `4c21d965_opengym`):
 
 | Step | What it is | Status |
 |---|---|---|
-| Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Backend confirmed on live 0.1.0. Ingress root cause confirmed and fixed locally in 0.1.1, but not yet built/installed.** The live browser failure is caused by upstream CSP `frame-ancestors 'none'`, not a dead route or the Cloudflare Tunnel. Close this only after installing 0.1.1 and reading back the UI plus response headers. |
+| Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Backend confirmed on live 0.1.0. Ingress root cause confirmed; fixed and Docker-validated in 0.1.1, but not yet installed on Supervisor.** The live browser failure is caused by upstream CSP `frame-ancestors 'none'`, not a dead route or the Cloudflare Tunnel. Close this only after installing 0.1.1 and reading back the iframe plus proxied response headers. |
 | Step 2 — real accounts (Passkey hostname / Public URL) | Fill in `rp_id` + `public_url` in Configuration, restart | **Not tested at all.** Both fields are still blank on the live install (guest mode only, from Bug 1–3 debugging). Nobody has entered a real hostname, restarted, and confirmed the sign-in screen actually offers "Create a passkey." |
 | Step 3 — Cloudflare Tunnel | Install Cloudflared App, point a hostname at port 8099 | **Not tested at all.** Matheus already has Cloudflare Tunnel infra for other services (see his own reference memory), but nothing has been wired up for openGym specifically this session. |
 | Step 4 — AI connector (MCP) | Second hostname, port 3001, `mcp_enabled` + `mcp_origin` | **Not tested at all.** `mcp_enabled` is still `false` on the live install. Separately, note the `TEMPORARY` `OPENGYM_REF` pin (see "Next steps" #3) means this image is built from the `feat/mcp-connections-ui` fork commit specifically so MCP *can* work once configured — but that code path itself hasn't been exercised inside this HA packaging yet. |
@@ -275,11 +287,12 @@ has real backend evidence behind it.
 
 ## Next steps, in order
 
-1. **Build and install local version 0.1.1, then re-test Ingress in the
-   authenticated browser.** Required readback: iframe renders openGym instead
+1. **Publish/install version 0.1.1, then re-test Ingress in the authenticated
+   browser.** The isolated Docker build/run is already green. Required live
+   readback: iframe renders openGym instead
    of `refused to connect`; the document response is 200; CSP is
-   `frame-ancestors 'self'`; `/api/health` remains healthy. The unbuilt local
-   patch and exact diagnosis are documented above.
+   `frame-ancestors 'self'`; `/api/health` remains healthy. Publishing/pushing
+   and changing the live HA installation remain separate authorization gates.
 2. **Test Steps 2–4 from `DOCS.md`** (real accounts, Cloudflare Tunnel,
    AI connector) against the live install — see "Test coverage" above.
    Needs Matheus's own domain/Cloudflare decisions, so it wasn't done
