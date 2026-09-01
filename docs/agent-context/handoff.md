@@ -335,6 +335,112 @@ Supervisor (slug `4c21d965_opengym`), via the Terminal & SSH app's `ha` CLI:
 (Bugs 1–3) and Ingress/browser rendering are confirmed working on the live
 Supervisor install running version 0.1.1.
 
+## 2026-09-01: Steps 2 and 4 confirmed live, security fixes shipped as 0.1.2
+
+Continuing the same session, with a real domain (`og-teste.picoli.eu` +
+`og-teste-mcp.picoli.eu`, both Cloudflare Tunnel hostnames added to the
+existing `claudeflare` tunnel — DNS-proxied, Universal SSL). One gotcha hit
+and fixed along the way: a hostname with **two** subdomain levels
+(`mcp.og-teste.picoli.eu`) fails TLS handshake, because picoli.eu's
+Universal SSL cert only covers `picoli.eu` + `*.picoli.eu` (one level) —
+renamed to the one-level `og-teste-mcp.picoli.eu` and it worked immediately.
+Matheus explicitly authorized doing Cloudflare's Google-SSO login myself
+going forward when the dashboard needs it (saved as
+`feedback_cloudflare_access_method` in memory) — API first, dashboard as
+fallback.
+
+- **Step 2 (real accounts) — confirmed working.** Set `rp_id` /
+  `public_url` to the real hostname, restarted, opened
+  `https://og-teste.picoli.eu/`, chose "Create new profile," and Matheus
+  completed the Touch ID ceremony himself (WebAuthn requires the actual
+  hardware — not something Chrome automation or I can do). Landed on the
+  real signed-in home screen ("Hi Matheus"), not guest mode.
+- **Step 4 (AI/MCP connector) — confirmed working end to end**, including
+  a real tool call round-trip: from openGym's own Settings page, "Add in
+  Claude" pre-filled the connector, added as a **second** claude.ai
+  connector named "OpenGym (teste)" (an existing unrelated connector
+  already pointed at `fit-mcp.picoli.eu` — a separate, undocumented-here
+  production-looking MCP proxy on its own dedicated Cloudflare Tunnel,
+  discovered but deliberately left untouched per Matheus's instruction).
+  Completed the OAuth consent flow (profile picker + read/write scope
+  choice), then in a fresh claude.ai chat asked it to call `list_profiles`,
+  `list_routines`, and `get_profile_state` — all three executed and
+  returned real data.
+
+### Three fixes shipped as version 0.1.2, all validated with an isolated Docker build+run on the VPS before publishing
+
+Matheus asked for a security pass over the app + the new tunnels, which
+surfaced a real bug; separately he asked about logging and proposed a
+same-domain MCP toggle. All three landed together:
+
+1. **Security fix — stack-trace info disclosure.** `mcp/run` was missing
+   `NODE_ENV=production` (`api/run` already had it), so Express's default
+   *development* error handler sent full stack traces — including internal
+   container filesystem paths (`/opt/opengym/mcp/node_modules/...`) — to
+   any client that sent malformed input to the publicly-reachable MCP
+   endpoint. Confirmed the leak first (`curl` with broken JSON), then
+   confirmed it gone after the fix, both in isolation and live.
+2. **nginx logging to stdout.** Alpine's nginx logs to
+   `/var/log/nginx/{access,error}.log` by default — invisible in HA's own
+   Log tab (stdout/stderr only) and lost on every container restart
+   (nothing under `/data`). Redirected both to `/dev/stdout` /
+   `/dev/stderr` via a Dockerfile sed on `/etc/nginx/nginx.conf`. Confirmed
+   via `docker logs` showing real access/error lines during testing.
+   Deeper *application*-level access/audit logging (api/mcp themselves)
+   would require patching openGym's own source, which is out of scope for
+   a packaging-only repo — noted, not done.
+3. **Same-domain MCP mode (`mcp_origin` is now truly optional).** Matheus's
+   idea: a Cloudflare-Access-style login wall in front of the main domain
+   breaks MCP (it's machine-to-machine and can't complete an interactive
+   login redirect), so a second, un-gated hostname is only needed for that
+   specific case — everyone else can share one domain. HA Supervisor's
+   options schema can't do real conditional field visibility (confirmed
+   against `feedback-ha-options-flow-no-mcp` from memory), so the
+   equivalent was implemented instead: leaving `mcp_origin` blank now makes
+   `mcp/run` fall back to `public_url`, and a new
+   `opengym/nginx/mcp-shared.conf` (this repo's own file, spliced into
+   `default.conf.template` at build time via `sed ... r`, not an `include`
+   — avoids all GNU-vs-BusyBox-sed `a`-command portability risk) proxies
+   the rest of the MCP route surface (`/mcp`, `/manage/*`, `/token`,
+   `/register`, `/revoke`, and the three `.well-known` metadata paths —
+   enumerated directly from `mcp/src/http.js` and the
+   `@modelcontextprotocol/sdk`'s `mcpAuthRouter()` source in the running
+   container, not guessed) onto that same origin. A second `mcp_origin`
+   domain is still fully supported for the access-control case.
+   `ports_description` for 3001/tcp and `DOCS.md` Step 4 updated to match.
+   Confirmed live: `og-teste-mcp.picoli.eu` was reconfigured back out (left
+   `mcp_origin` blank), and `/.well-known/oauth-authorization-server` on
+   `og-teste.picoli.eu` itself now returns every OAuth endpoint
+   (issuer/authorization/token/registration/revocation) on that single
+   domain — no second port published on the container at all.
+
+Also per Matheus's request: `DOCS.md` Step 3 (Cloudflare Tunnel) now has
+two `<details>` collapsible sections — "I don't have a domain in Cloudflare
+yet" (full path: registrar → free Cloudflare account → nameservers) and "I
+already have a domain added to Cloudflare" (starts from installing
+Cloudflared) — instead of one linear path that assumed a domain already
+existed. Not yet visually confirmed that HA's Documentação tab renders
+raw `<details>`/`<summary>` HTML correctly — check this next time the
+Documentação tab is open in a browser.
+
+**Gotcha reconfirmed**: uninstalling and reinstalling the app (needed here
+to pick up the version bump, same stubborn-caching pattern as before) wipes
+its saved Configuration options back to `config.yaml`'s defaults — `rp_id`,
+`public_url`, `mcp_enabled`, and `mcp_origin` all had to be re-entered
+after the 0.1.1→0.1.2 upgrade, and the `og-teste` passkey account created
+earlier this session was lost (`/api/health` went from `users:1` back to
+`users:0`) even though `/data` itself is a persistent Supervisor volume —
+worth understanding better before this happens on a real user-facing
+install, since it means every version bump that needs a reinstall is
+destructive to configuration unless it's re-applied by hand afterward.
+
+Minor housekeeping left on the VPS (`vps-kansas-city`): a stray
+`/tmp/opengym-test-build` + `/tmp/opengym-test-data` (~140 MB, root-owned
+from the container's bind mount) from this session's isolated validation
+build — harmless, will clear on next reboot, `sudo rm -rf` needed to clear
+it sooner (no interactive terminal available to supply the sudo password
+this session).
+
 ## Test coverage — what's confirmed vs. still untested
 
 Mapped against `opengym/DOCS.md`'s own steps, against the real Supervisor
@@ -343,33 +449,60 @@ install on `home.picoli.eu` (slug `4c21d965_opengym`):
 | Step | What it is | Status |
 |---|---|---|
 | Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Fully confirmed on live 0.1.1.** Backend (Bugs 1–3) and Ingress (CSP `frame-ancestors 'self'`, HTTP 200, `/api/health` healthy) both verified against the real Supervisor install — see "version 0.1.1 installed on live Supervisor" above. |
-| Step 2 — real accounts (Passkey hostname / Public URL) | Fill in `rp_id` + `public_url` in Configuration, restart | **Not tested at all.** Both fields are still blank on the live install (guest mode only, from Bug 1–3 debugging). Nobody has entered a real hostname, restarted, and confirmed the sign-in screen actually offers "Create a passkey." |
-| Step 3 — Cloudflare Tunnel | Install Cloudflared App, point a hostname at port 8099 | **Not tested at all.** Matheus already has Cloudflare Tunnel infra for other services (see his own reference memory), but nothing has been wired up for openGym specifically this session. |
-| Step 4 — AI connector (MCP) | Second hostname, port 3001, `mcp_enabled` + `mcp_origin` | **Not tested at all.** `mcp_enabled` is still `false` on the live install. Separately, note the `TEMPORARY` `OPENGYM_REF` pin (see "Next steps" #3) means this image is built from the `feat/mcp-connections-ui` fork commit specifically so MCP *can* work once configured — but that code path itself hasn't been exercised inside this HA packaging yet. |
-| Optional: make yourself admin | Set `admin_uids` in Configuration | **Not tested.** Field is blank. |
+| Step 2 — real accounts (Passkey hostname / Public URL) | Fill in `rp_id` + `public_url` in Configuration, restart | **Fully confirmed.** Real passkey created via Touch ID on `og-teste.picoli.eu`, landed signed-in (not guest). Currently blank again on the live install after the 0.1.2 reinstall wiped Configuration (see gotcha above) — re-entering these two fields is enough to get back to the confirmed-working state, no code changes needed. |
+| Step 3 — Cloudflare Tunnel | Install Cloudflared App, point a hostname at port 8099 | **Confirmed, but via a different path than DOCS.md describes**: this session used the existing `claudeflare` Named Tunnel (already running as a systemd `cloudflared` service on host `pve`, config managed via the Cloudflare dashboard's Published Application Routes, not a separate Cloudflared **App** inside this HA instance) rather than installing the Cloudflared *App* from the Store. Functionally equivalent — same tunnel mechanism — but nobody has actually walked through DOCS.md's own instructions (installing the Cloudflared App itself) to confirm they're accurate for someone without pre-existing tunnel infra. |
+| Step 4 — AI connector (MCP) | `mcp_enabled` + `public_url` (mcp_origin optional as of 0.1.2) | **Fully confirmed**, both server-side (OAuth metadata, `/mcp` endpoint) and through a real claude.ai connector doing an actual tool call round-trip. Currently off again after the reinstall — re-enable `mcp_enabled` (and re-set `public_url`) to get back to the confirmed state. |
+| Optional: make yourself admin | Set `admin_uids` in Configuration | **Not tested.** Field is blank. Also worth finding: is there a less fragile way to get a profile's `id` than reading `db.json` by hand through the Terminal app, as DOCS.md currently instructs? |
 
-In short: the one thing this session set out to close — does `bashio::config`
-actually work against a real Supervisor — **is closed** (Bugs 1–3 and the
-"Confirmed working" section above). Everything past Step 1 in `DOCS.md` is
-still exactly as untested as before this session; only the guest-mode path
-has real backend evidence behind it.
+In short: both what this session originally set out to close (`bashio::config`
+against a real Supervisor — Bugs 1–3) and what it closed today (Steps 2 and
+4, end to end, including a real external MCP client) are done. Only Step 3's
+literal DOCS.md path (the Cloudflared *App*, as opposed to the equivalent
+tunnel setup this session actually used) and the admin flag remain
+unverified.
 
 ## Next steps, in order
 
 1. ~~Publish/install version 0.1.1, then re-test Ingress in the authenticated
-   browser.~~ **Done 2026-09-01** — see "version 0.1.1 installed on live
-   Supervisor" above. All four required live checks passed.
-2. **Test Steps 2–4 from `DOCS.md`** (real accounts, Cloudflare Tunnel,
-   AI connector) against the live install — see "Test coverage" above.
-   Needs Matheus's own domain/Cloudflare decisions, so it wasn't done
-   autonomously this session. Fix forward in this repo if anything breaks,
-   same as Bugs 1–3.
-3. Optional/minor: investigate the `manifest.json` 401 under the ingress path
-   noted above — cosmetic (PWA install prompt), not a functional blocker.
-4. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
+   browser.~~ **Done 2026-09-01.**
+2. ~~Test Steps 2–4 from `DOCS.md` (real accounts, Cloudflare Tunnel,
+   AI connector) against the live install.~~ **Steps 2 and 4 done and
+   confirmed 2026-09-01**, including a real MCP tool-call round-trip from
+   claude.ai. Step 3 confirmed functionally (the tunnel works) but not via
+   DOCS.md's own literal instructions (Cloudflared App) — see the Test
+   coverage table.
+3. **Re-enter Configuration on the live install**: `rp_id` = `og-teste.picoli.eu`,
+   `public_url` = `https://og-teste.picoli.eu`, `mcp_enabled` on — wiped by
+   the 0.1.2 reinstall (see the reinstall-wipes-config gotcha above). Not
+   done automatically since it's better paired with actually walking
+   through DOCS.md Step 3 fresh (next item) rather than just restoring
+   state blindly.
+4. **Actually follow DOCS.md Step 3's own instructions once** (install the
+   Cloudflared *App* from the Store, not the pre-existing systemd tunnel
+   this session used) against a fresh test hostname, to confirm the docs
+   are accurate for someone without Matheus's existing tunnel
+   infrastructure — the two collapsible sub-sections added today
+   (no-domain-yet vs. already-have-one) haven't been read by an actual
+   human yet either.
+5. **Visually confirm the DOCS.md `<details>`/`<summary>` collapsible
+   sections render correctly** in HA's Documentação tab — added today,
+   untested in a real browser.
+6. Optional/minor: investigate the `manifest.json` 401 under the ingress path
+   noted earlier — cosmetic (PWA install prompt), not a functional blocker.
+7. Optional/minor: `sudo rm -rf /tmp/opengym-test-build /tmp/opengym-test-data`
+   on `vps-kansas-city` (~140 MB, root-owned, harmless leftover from this
+   session's isolated 0.1.2 validation build).
+8. Optional: figure out why the app's own passkey account data (`db.json`
+   under `/data`) didn't survive the uninstall+reinstall cycle needed for
+   the version bump, given `/data` is supposed to be a persistent Supervisor
+   volume independent of the container — reproduce deliberately and check
+   whether it's actually `/data` being wiped or something else (a fresh
+   `db.json` being created because `rp_id`/`public_url` reset to blank
+   first, orphaning the existing passkey's RP binding).
+9. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
    merges upstream: switch `opengym/Dockerfile`'s clone URL back to
    `https://gitlab.com/DuarteSantos8/opengym.git` and `OPENGYM_REF` back to
    `main` (or a release tag). Remove the `TEMPORARY` comments once done.
-5. Not before all of the above: consider whether to submit this for listing
-   in any curated Home Assistant add-on index. Ship as an unlisted personal
-   repo first — this was an explicit "not doing yet" in the original plan.
+10. Not before all of the above: consider whether to submit this for listing
+    in any curated Home Assistant add-on index. Ship as an unlisted personal
+    repo first — this was an explicit "not doing yet" in the original plan.
