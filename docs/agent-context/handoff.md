@@ -275,6 +275,25 @@ GitLab's public API reports MR !86 still **open**, not merged, with
 and pinned commit in `opengym/Dockerfile` remain in place. Do not switch to
 upstream `main` yet.
 
+The first public 0.1.1 workflow after the Ingress fix exposed an additional
+reproducibility issue: both amd64 and aarch64 runners failed at `git checkout
+ebd49888...` with `fatal: unable to read tree`. The earlier isolated VPS build
+had succeeded only because Docker cached that now-unreachable source object.
+The MR branch had been force-updated to the SHA above. A fresh shallow clone of
+`feat/mcp-connections-ui` confirmed that exact HEAD and the required
+`api/state-store.js`, `mcp/src/http.js`, and `web/nginx.conf.template` files.
+`OPENGYM_REF` was therefore advanced to the exact current MR SHA (still pinned,
+not a moving branch and not upstream `main`). The failed workflow published no
+manifest, so no broken 0.1.1 image was made available to Supervisor.
+
+Before republishing, the updated pin was validated on the VPS with a real
+`--no-cache` build and isolated run. The fresh clone checked out `22e80b8...`;
+the frontend built; `/api/health` returned `{"ok":true,"users":0}`; the root
+returned HTTP 200 with `SAMEORIGIN` plus `frame-ancestors 'self'`; s6 listed
+`api`, `mcp`, `web`, and `media-init`; and the container stayed running with
+zero restarts. The test container, image, VPS build/data directories, and local
+review clone were removed afterward.
+
 ## Test coverage — what's confirmed vs. still untested
 
 Mapped against `opengym/DOCS.md`'s own steps, against the real Supervisor

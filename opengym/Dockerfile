@@ -20,7 +20,7 @@
 # is HA's current multi-arch (amd64+aarch64) Alpine base — a single tag resolves the
 # right platform automatically on each matrix runner, no per-arch selection needed.
 ARG BUILD_FROM=ghcr.io/home-assistant/base:3.24
-ARG OPENGYM_REF=ebd49888f53e56806c11e4ce4dae2c0b6aabd619
+ARG OPENGYM_REF=22e80b8fe8703449dcada96d1d99a589e8fb7282
 
 FROM node:22-alpine AS source
 ARG OPENGYM_REF
