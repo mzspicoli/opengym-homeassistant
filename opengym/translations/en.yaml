@@ -35,7 +35,11 @@ configuration:
       workouts when you ask it to. See the docs above, Step 4, before
       turning this on.
   mcp_origin:
-    name: AI connector address
+    name: AI connector address (optional)
     description: >-
-      A second web address, different from the Public URL above, e.g.
-      https://gym-ai.example.com. Required when Enable AI connector is on.
+      Leave blank to use the Public URL above — that's right for almost
+      everyone. Only set a second address here (e.g. https://gym-ai.example.com)
+      if you put an access-control layer such as Cloudflare Access in front of
+      your Public URL: the AI connector can't complete that kind of login
+      redirect, so it needs its own address left out of that layer. See the
+      docs above, Step 4.

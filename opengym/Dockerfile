@@ -55,18 +55,40 @@ FROM ${BUILD_FROM}
 # so there is nothing here that's sensitive to the exact Node minor version.
 RUN apk add --no-cache nodejs npm nginx git gettext
 
+# Alpine's nginx package logs to files under /var/log/nginx by default. Inside
+# a container that's a dead end: HA's own "Log" tab only captures stdout/
+# stderr, so access/error logs would be invisible there and lost on every
+# restart (nothing under /data). Redirect both to the standard streams
+# instead, the normal container-logging convention.
+RUN sed -i \
+      -e 's#access_log /var/log/nginx/access.log main;#access_log /dev/stdout main;#' \
+      -e 's#error_log /var/log/nginx/error.log warn;#error_log /dev/stderr warn;#' \
+      /etc/nginx/nginx.conf \
+    && grep -Fq 'access_log /dev/stdout main;' /etc/nginx/nginx.conf \
+    && grep -Fq 'error_log /dev/stderr warn;' /etc/nginx/nginx.conf
+
 # --- web (frontend + nginx) ---
 COPY --from=frontend-build /src/frontend/dist /usr/share/nginx/html
 COPY --from=source /src/web/nginx.conf.template /etc/nginx/templates/default.conf.template
+COPY nginx/mcp-shared.conf /tmp/mcp-shared.conf
 # Single-container: every process is 127.0.0.1, not a separate compose service name.
+# The final sed's `r` command splices this repo's own nginx/mcp-shared.conf
+# (see its header comment) in right after `set $mcp_backend ...;`, inline —
+# `r` reads a plain file, no embedded-newline/line-continuation portability
+# risk the way sed's `a` command would have across GNU vs BusyBox sed. Those
+# extra locations proxy the rest of the MCP route surface onto this same
+# origin, for operators who leave mcp_origin blank (same-domain MCP mode).
 RUN sed -i \
       -e 's/mcp:3001/127.0.0.1:3001/' \
       -e 's/X-Frame-Options "DENY"/X-Frame-Options "SAMEORIGIN"/g' \
       -e "s/frame-ancestors 'none'/frame-ancestors 'self'/g" \
+      -e '/set \$mcp_backend 127.0.0.1:3001;/r /tmp/mcp-shared.conf' \
       /etc/nginx/templates/default.conf.template \
+    && rm /tmp/mcp-shared.conf \
     && ! grep -Fq "frame-ancestors 'none'" /etc/nginx/templates/default.conf.template \
     && grep -Fq 'X-Frame-Options "SAMEORIGIN"' /etc/nginx/templates/default.conf.template \
-    && grep -Fq "frame-ancestors 'self'" /etc/nginx/templates/default.conf.template
+    && grep -Fq "frame-ancestors 'self'" /etc/nginx/templates/default.conf.template \
+    && grep -Fq 'location ^~ /mcp {' /etc/nginx/templates/default.conf.template
 # Packaging-only framing adaptation: upstream correctly denies embedding on a
 # normal standalone deployment, but HA Ingress is itself a same-origin iframe.
 # SAMEORIGIN + frame-ancestors 'self' keeps cross-site framing blocked while

@@ -1,6 +1,6 @@
 ---
 name: openGym
-version: "0.1.1"
+version: "0.1.2"
 slug: opengym
 description: >-
   Self-hosted gym & body-weight tracker — routines, workouts, supersets,
@@ -21,7 +21,7 @@ ports:
   3001/tcp: null
 ports_description:
   8099/tcp: "openGym web (also reachable directly, outside ingress, e.g. behind your own Cloudflare Tunnel)"
-  3001/tcp: "MCP endpoint (only listens when mcp_enabled is on) — point a second tunnel hostname at this, never the same one as 8099"
+  3001/tcp: "MCP endpoint — only needed as its own port/hostname if you set mcp_origin (access-control setups); otherwise MCP shares port 8099 with the web UI and this port can stay unmapped"
 map:
   - data:rw
 options:
@@ -59,4 +59,11 @@ schema:
   allow_guest: bool
   session_days: int(1,365)
   mcp_enabled: bool
+  # Optional. Blank (the default) means MCP shares public_url's hostname —
+  # the mcp/run s6 service falls back to that, and mcp-shared.conf (this
+  # repo's own nginx include, not upstream's) proxies the rest of MCP's route
+  # surface onto that same origin. Only set this to a second address for
+  # installs with an access-control layer (Cloudflare Access or similar) in
+  # front of public_url — MCP can't complete that kind of interactive login
+  # redirect, so it needs its own hostname left out of that layer.
   mcp_origin: str?

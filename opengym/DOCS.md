@@ -45,20 +45,44 @@ people sign up for real.
 
 This makes your web address reach openGym without opening any ports on your
 router — free, and Cloudflare handles the security certificate for you.
+Pick whichever of the two boxes below matches where you're starting from —
+you only need to follow one.
+
+<details>
+<summary><strong>I don't have a domain in Cloudflare yet</strong> (click to expand)</summary>
+
+1. Get a domain name from any registrar, if you don't already have one —
+   this usually costs very little and takes a few minutes.
+2. Create a free account at [cloudflare.com](https://cloudflare.com) if you
+   don't have one.
+3. In the Cloudflare dashboard, click **Add a domain** and follow the steps
+   to add the domain from step 1. Cloudflare will give you two nameservers —
+   go to your registrar and point your domain at those nameservers (the
+   registrar's site will have a "Nameservers" or "DNS" section for this).
+   This can take anywhere from a few minutes to a few hours to take effect.
+4. Once Cloudflare shows your domain as **Active**, continue with the "I
+   already have a domain in Cloudflare" box below.
+
+</details>
+
+<details>
+<summary><strong>I already have a domain added to Cloudflare</strong> (click to expand)</summary>
 
 1. In the Add-on Store, install **Cloudflared** (search for it, it's a
    separate, well-known App — not part of openGym).
-2. Follow Cloudflared's own setup to connect it to a free Cloudflare
-   account and pick your domain.
+2. Follow Cloudflared's own setup to connect it to your Cloudflare account
+   and pick your domain.
 3. Open Cloudflared's **Configuration** tab and add one entry pointing your
    chosen address at openGym:
    - Hostname: `gym.yourname.com`
    - Service: `http://localhost:8099`
 4. Save and restart Cloudflared. Your web address now reaches openGym.
 
-**Using the AI connector (Step 4) too?** Add a second entry the same way,
-with your second hostname (see Step 4) pointing at `http://localhost:3001`
-instead.
+</details>
+
+That's it for most people — the AI connector (Step 4) shares this same
+address by default, no second entry needed unless you specifically use an
+access-control layer like Cloudflare Access (see Step 4).
 
 ## Step 4 — Let an AI assistant read your workouts (optional, advanced)
 
@@ -66,21 +90,35 @@ openGym can let an AI chat app (like Claude or ChatGPT) look up your
 workouts when you ask it to, if you turn this on. Skip this section
 entirely unless you specifically want that.
 
-This needs its **own second web address**, different from the one in Step 2
-— for example `gym-ai.yourname.com`. Set it up the same way as Step 3 (its
-own Cloudflared entry, pointed at port `3001` instead of `8099`), then on
-this App's **Configuration** tab:
+For almost everyone, this is all it takes — no second address, no extra
+Cloudflare Tunnel entry:
 
-- Turn on **Enable AI connector**
-- **AI connector address**: `https://gym-ai.yourname.com`
+- On this App's **Configuration** tab, turn on **Enable AI connector**.
+- Leave **AI connector address** blank.
+- Restart the App.
 
-One more thing, only if your main address (from Step 2) sits behind a login
-wall like Cloudflare Access: that login wall needs one narrow exception for
-the page `gym.yourname.com/mcp-authorize` specifically — openGym already
-checks who you are on that page itself, so the extra login wall there just
-gets in the way. Cloudflare Access calls this a "Bypass" rule for that exact
-address. If you don't use a login wall like that, there's nothing extra to
-do here.
+**Only if** your address from Step 2 sits behind an access-control layer
+(Cloudflare Access or a similar login wall in front of the whole domain),
+read on — otherwise skip the rest of this section. The AI connector talks
+machine-to-machine; it can't complete the kind of interactive login redirect
+an access-control layer expects, so it needs its own address that sits
+outside that layer entirely:
+
+1. Pick a second web address, different from the one in Step 2 — for
+   example `gym-ai.yourname.com`.
+2. Set it up the same way as Step 3 (its own Cloudflared entry, pointed at
+   port `3001` instead of `8099`) — and make sure this second address is
+   **not** covered by your access-control layer's login wall.
+3. On this App's **Configuration** tab:
+   - Turn on **Enable AI connector**.
+   - **AI connector address**: `https://gym-ai.yourname.com`
+4. Restart the App.
+
+One more thing, in this access-control case specifically: the login wall in
+front of your Step 2 address also needs one narrow exception for the page
+`gym.yourname.com/mcp-authorize` — openGym already checks who you are on
+that page itself, so the extra login wall there just gets in the way.
+Cloudflare Access calls this a "Bypass" rule for that exact address.
 
 ## Optional: make yourself an administrator
 

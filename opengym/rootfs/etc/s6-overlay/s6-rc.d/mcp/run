@@ -2,24 +2,37 @@
 # openGym's mcp/src/http.js, unchanged. Idles instead of starting when mcp_enabled
 # is off, rather than exiting (which s6 would just crash-loop and spam the log).
 #
-# Requires the two-hostname remote-MCP design (upstream MR !86 — not merged as of
-# this writing; see this repo's README). If OPENGYM_REF predates that merge, the
-# nginx template this image ships won't have the /mcp-authorize route this expects,
-# and mcp_enabled will not work even though the service starts.
+# mcp_origin is optional. Most installs should leave it blank: MCP then shares
+# public_url's hostname, and the mcp-shared.conf nginx include (this repo's own
+# file, not upstream's) proxies the rest of the MCP route surface onto that same
+# origin — no second tunnel/hostname to set up. A separate mcp_origin is only
+# needed for installs that put an access-control layer in front of public_url
+# (Cloudflare Access or similar): MCP is machine-to-machine and can't complete
+# that kind of interactive login redirect, so it needs its own hostname left
+# out of that layer. See this app's DOCS.md.
 set -e
 
 if ! bashio::config.true 'mcp_enabled'; then
     exec sleep infinity
 fi
 
-if ! bashio::config.has_value 'mcp_origin'; then
-    bashio::log.error "mcp_enabled is on but mcp_origin is not set — see this app's DOCS.md."
+if ! bashio::config.has_value 'public_url'; then
+    bashio::log.error "mcp_enabled is on but public_url is not set — MCP needs a real hostname to issue OAuth tokens for. See this app's DOCS.md."
     exec sleep infinity
 fi
 
 ORIGIN="$(bashio::config 'public_url')"
-MCP_ORIGIN="$(bashio::config 'mcp_origin')"
+if bashio::config.has_value 'mcp_origin'; then
+    MCP_ORIGIN="$(bashio::config 'mcp_origin')"
+else
+    MCP_ORIGIN="$ORIGIN"
+fi
 
+# Without this, Express's default env ('development') sends full stack traces
+# (including internal filesystem paths) to any client on malformed requests —
+# security-relevant info disclosure on a publicly-reachable endpoint. api/run
+# already sets this; mcp/run needs it too since it's a separate node process.
+export NODE_ENV=production
 export PORT=3001
 export OPENGYM_DATA=/data
 export OAUTH_DATA=/data/mcp-oauth
