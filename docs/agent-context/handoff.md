@@ -484,9 +484,10 @@ unverified.
    infrastructure — the two collapsible sub-sections added today
    (no-domain-yet vs. already-have-one) haven't been read by an actual
    human yet either.
-5. **Visually confirm the DOCS.md `<details>`/`<summary>` collapsible
-   sections render correctly** in HA's Documentação tab — added today,
-   untested in a real browser.
+5. ~~Visually confirm the DOCS.md `<details>`/`<summary>` collapsible
+   sections render correctly in HA's Documentação tab.~~ **Done
+   2026-09-01** — both render as native disclosure triangles and expand
+   correctly with their content on click.
 6. Optional/minor: investigate the `manifest.json` 401 under the ingress path
    noted earlier — cosmetic (PWA install prompt), not a functional blocker.
 7. Optional/minor: `sudo rm -rf /tmp/opengym-test-build /tmp/opengym-test-data`
