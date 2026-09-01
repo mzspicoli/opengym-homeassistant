@@ -1,6 +1,6 @@
 ---
 name: openGym
-version: "0.1.0"
+version: "0.1.1"
 slug: opengym
 description: >-
   Self-hosted gym & body-weight tracker — routines, workouts, supersets,

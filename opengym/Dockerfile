@@ -59,7 +59,18 @@ RUN apk add --no-cache nodejs npm nginx git gettext
 COPY --from=frontend-build /src/frontend/dist /usr/share/nginx/html
 COPY --from=source /src/web/nginx.conf.template /etc/nginx/templates/default.conf.template
 # Single-container: every process is 127.0.0.1, not a separate compose service name.
-RUN sed -i 's/mcp:3001/127.0.0.1:3001/' /etc/nginx/templates/default.conf.template
+RUN sed -i \
+      -e 's/mcp:3001/127.0.0.1:3001/' \
+      -e 's/X-Frame-Options "DENY"/X-Frame-Options "SAMEORIGIN"/g' \
+      -e "s/frame-ancestors 'none'/frame-ancestors 'self'/g" \
+      /etc/nginx/templates/default.conf.template \
+    && ! grep -Fq "frame-ancestors 'none'" /etc/nginx/templates/default.conf.template \
+    && grep -Fq 'X-Frame-Options "SAMEORIGIN"' /etc/nginx/templates/default.conf.template \
+    && grep -Fq "frame-ancestors 'self'" /etc/nginx/templates/default.conf.template
+# Packaging-only framing adaptation: upstream correctly denies embedding on a
+# normal standalone deployment, but HA Ingress is itself a same-origin iframe.
+# SAMEORIGIN + frame-ancestors 'self' keeps cross-site framing blocked while
+# allowing the Supervisor's authenticated /api/hassio_ingress/... wrapper.
 # Alpine's nginx package ships its own welcome-page vhost here; remove it so it
 # can't conflict with (or shadow) the one rendered at container start.
 RUN rm -f /etc/nginx/http.d/default.conf

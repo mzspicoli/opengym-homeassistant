@@ -12,13 +12,13 @@ and its community of contributors, at
 That's where the real product lives, and where credit for it belongs — the
 routines, the workout tracking, the passkey login, all of it.
 
-This repository does not contain any of that work. It only adds the
-Home Assistant plumbing (one `Dockerfile`, some startup scripts, one config
-screen) around openGym's own, unmodified source code, which it fetches
-straight from the GitLab repo above every time an image is built. Nothing
-here is a fork of openGym, and nothing in openGym's own code is changed,
-copied, or claimed as this project's work — this repo is maintainer-neutral
-packaging, not a competing distribution.
+This repository does not contain openGym's application source. It only adds
+the Home Assistant plumbing (one `Dockerfile`, some startup scripts, one config
+screen) around openGym's own, unmodified source code, which it fetches from
+the GitLab repo above every time an image is built. The Store icon and logo
+are derived from openGym's official visual assets and remain credited to that
+project. Nothing here is a fork of openGym or claims its work — this repo is
+maintainer-neutral packaging, not a competing distribution.
 
 If openGym is useful to you, go star/support the original project. Bug
 reports about openGym itself (missing a feature, a workout not saving
@@ -58,10 +58,13 @@ Once it is, this needs to switch back to pulling from
 `gitlab.com/DuarteSantos8/opengym` directly — see the `TEMPORARY` notes in
 `opengym/Dockerfile`.
 
-**Status:** builds and runs correctly in a plain Docker test (confirmed:
-serves the app, downloads exercise media, the optional AI connector idles
-correctly when off). Not yet run inside a real Home Assistant instance —
-that's the one thing still needed before calling this finished.
+**Status:** version 0.1.0 is installed and its backend is running on a real
+Home Assistant Supervisor. That test found and fixed three Supervisor-only
+configuration bugs. The remaining Ingress iframe failure has also been traced
+to upstream's `frame-ancestors 'none'` header and fixed locally in packaging
+version 0.1.1; that image still needs to be built, installed, and read back in
+a browser before guest mode is fully confirmed. See the handoff for exact
+evidence and the remaining Steps 2–4 tests.
 
 ## License
 
@@ -69,6 +72,6 @@ This packaging: AGPL-3.0-or-later, matching openGym itself.
 
 ## TODO before any public listing
 
-- `opengym/icon.png` (128×128) and `opengym/logo.png` (250×100) — not yet
-  added; the Store shows a generic icon until these exist.
-- Real Home Assistant test (see `docs/agent-context/handoff.md`).
+- Build/install 0.1.1 and confirm the corrected Ingress UI in a real browser.
+- Test account/passkey, Cloudflare Tunnel, and optional MCP configuration (see
+  `docs/agent-context/handoff.md`).

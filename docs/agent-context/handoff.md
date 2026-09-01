@@ -1,8 +1,7 @@
 # Handoff — opengym-ha-app
 
-Last updated: 2026-09-01 (Claude Code, same session that finished the
-openGym remote-MCP two-hostname work — see that project's own handoff for
-unrelated context).
+Last updated: 2026-09-01 (Codex continuation after Claude Code's real
+Supervisor install and packaging-debugging session).
 
 ## Current state
 
@@ -12,8 +11,12 @@ Matheus's explicit go-ahead) to **https://github.com/mzspicoli/opengym-homeassis
 Assistant** (`home.picoli.eu`) as of this session — see "2026-09-01: real
 Supervisor test" below for the three real bugs that surfaced and were fixed
 against the actual Supervisor (none of them reproduced in Docker-only
-testing). One piece is still unconfirmed: the Ingress web UI in an actual
-browser — see that same section for what to check next.
+testing). The remaining Ingress failure is now diagnosed precisely: the
+packaged upstream nginx template returns `Content-Security-Policy:
+frame-ancestors 'none'`, so the browser correctly refuses HA's iframe even
+though the endpoint itself returns 200. A packaging-only fix exists locally
+in version `0.1.1`; it still needs a real image build/install and browser
+readback before Step 1 is closed.
 
 All files exist and are internally consistent (see root `README.md` for the
 map). Two independent real-Docker builds on the VPS (not just read-through)
@@ -178,25 +181,78 @@ test round could exercise. `wget` from inside the container to
 crash or a stub response. `curl -I` from outside the VPS to
 `https://home.picoli.eu/app/4c21d965_opengym` also returned `200`.
 
-### Not yet confirmed: the Ingress web UI in an actual browser
+### Initial unresolved Ingress result (superseded by the diagnosis below)
 
 Clicking **Abrir interface web** in a real browser session (through
 Chrome automation, not on Matheus's own LAN) produced a plain
 `home.picoli.eu refused to connect` — a connection-level failure, not an
 HTTP error page, and it reproduced consistently across three attempts
 (including one via a direct URL navigation that still resolved through the
-SPA router, `#/`). This is very unlikely to be an openGym-specific bug:
-`internal_url`/`external_url` are both unset on this HA instance (checked
-via `/api/config`), and the same-shaped `curl -I` from outside confirmed the
-underlying HTTP route is genuinely serving `200`. The most likely
-explanation is something in how this specific Cloudflare Tunnel setup
-proxies the Ingress iframe/WebSocket for external (non-LAN) sessions — a
-property of the tunnel, not of this add-on's packaging. **Needs
-confirmation from Matheus's own device** (ideally on the home LAN, where
-Ingress traffic doesn't have to cross the tunnel at all) before treating
-this as closed. If it turns out to be real and openGym-specific, the
-likeliest place to look is `web/nginx.conf.template`'s handling of the
-`X-Ingress-Path` header Supervisor injects for Ingress requests.
+SPA router, `#/`). `internal_url`/`external_url` were both unset on this HA
+instance (checked via `/api/config`), and the same-shaped `curl -I` from
+outside confirmed the underlying HTTP route was genuinely serving `200`.
+At that point the Cloudflare Tunnel was the leading hypothesis. The Codex
+continuation below disproved that hypothesis by opening the exact Ingress URL
+directly and reading its response headers: openGym's CSP blocked the iframe.
+
+## 2026-09-01: Codex continuation — Ingress root cause and local 0.1.1 fix
+
+The external-browser failure was reproduced again in Matheus's already
+authenticated Chrome session. The HA shell rendered normally, while its
+`openGym` iframe displayed `home.picoli.eu refused to connect.` The exact
+Ingress URL was then opened directly in a separate tab: it returned HTTP 200,
+loaded the openGym document, and set the page title to `openGym`. This ruled
+out the Cloudflare Tunnel and Supervisor route as the primary cause.
+
+Chrome network readback on that same 200 response showed the decisive header:
+
+```text
+Content-Security-Policy: frame-ancestors 'none'
+```
+
+That policy comes from openGym's own `web/nginx.conf.template` and forbids all
+embedding, including the legitimate same-origin iframe used by Home Assistant
+Ingress. The response also carried `X-Frame-Options: SAMEORIGIN` after the
+Supervisor proxy, which is compatible with HA; CSP's stricter `none` directive
+is what wins in the browser.
+
+Local packaging fix (not yet built or installed):
+
+- `opengym/Dockerfile` rewrites upstream's framing headers to
+  `X-Frame-Options: SAMEORIGIN` and CSP `frame-ancestors 'self'` while it
+  prepares the nginx template. This keeps cross-site framing blocked but lets
+  HA's same-origin Ingress wrapper embed the UI.
+- The Dockerfile has build-time assertions that fail if the Ingress-blocking
+  `frame-ancestors 'none'` survives or if the replacement headers are absent.
+- `opengym/config.yaml` is bumped from `0.1.0` to `0.1.1` so Supervisor can
+  recognize the corrected image as an update.
+- The transformation was rehearsed locally against openGym's current nginx
+  template: all three X-Frame-Options occurrences became `SAMEORIGIN`, all
+  three CSP occurrences became `frame-ancestors 'self'`, and no `none`
+  occurrence remained. `git diff --check` also passes.
+
+A real Docker build was not run in this continuation because Docker is absent
+on the Mac. The proposed isolated VPS build would copy the local build context
+to a temporary VPS directory and use the sudo credential from the Mac
+Keychain; that higher-authority action was not approved, so no remote files,
+images, containers, or production services were changed.
+
+## 2026-09-01: Store assets added locally
+
+`opengym/icon.png` (128x128) and `opengym/logo.png` (250x100) now exist and
+were visually checked. They are derived from openGym's official
+`frontend/public/icon-512.png` and `assets/banner.svg`, preserving its
+dumbbell mark, wordmark, and colors. `opengym/logo.svg` is the editable source
+for the compact Store layout. The root README now states this asset provenance
+explicitly instead of claiming that no upstream work at all is copied.
+
+## 2026-09-01: MR !86 current status
+
+GitLab's public API reports MR !86 still **open**, not merged, with
+`detailed_merge_status: conflict`; source SHA is
+`22e80b8fe8703449dcada96d1d99a589e8fb7282`. Therefore the temporary fork URL
+and pinned commit in `opengym/Dockerfile` remain in place. Do not switch to
+upstream `main` yet.
 
 ## Test coverage — what's confirmed vs. still untested
 
@@ -205,7 +261,7 @@ install on `home.picoli.eu` (slug `4c21d965_opengym`):
 
 | Step | What it is | Status |
 |---|---|---|
-| Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Backend confirmed** (container up, s6 services running, `/` and `/api/health` respond for real from inside and outside the host). **Browser/UI not confirmed** — see "Not yet confirmed" above (Ingress `refused to connect` in the remote Chrome session; needs Matheus's own device, ideally on the LAN). |
+| Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Backend confirmed on live 0.1.0. Ingress root cause confirmed and fixed locally in 0.1.1, but not yet built/installed.** The live browser failure is caused by upstream CSP `frame-ancestors 'none'`, not a dead route or the Cloudflare Tunnel. Close this only after installing 0.1.1 and reading back the UI plus response headers. |
 | Step 2 — real accounts (Passkey hostname / Public URL) | Fill in `rp_id` + `public_url` in Configuration, restart | **Not tested at all.** Both fields are still blank on the live install (guest mode only, from Bug 1–3 debugging). Nobody has entered a real hostname, restarted, and confirmed the sign-in screen actually offers "Create a passkey." |
 | Step 3 — Cloudflare Tunnel | Install Cloudflared App, point a hostname at port 8099 | **Not tested at all.** Matheus already has Cloudflare Tunnel infra for other services (see his own reference memory), but nothing has been wired up for openGym specifically this session. |
 | Step 4 — AI connector (MCP) | Second hostname, port 3001, `mcp_enabled` + `mcp_origin` | **Not tested at all.** `mcp_enabled` is still `false` on the live install. Separately, note the `TEMPORARY` `OPENGYM_REF` pin (see "Next steps" #3) means this image is built from the `feat/mcp-connections-ui` fork commit specifically so MCP *can* work once configured — but that code path itself hasn't been exercised inside this HA packaging yet. |
@@ -219,19 +275,20 @@ has real backend evidence behind it.
 
 ## Next steps, in order
 
-1. **Confirm the Ingress web UI from Matheus's own device** (see directly
-   above) — the one remaining unconfirmed piece of Step 1.
+1. **Build and install local version 0.1.1, then re-test Ingress in the
+   authenticated browser.** Required readback: iframe renders openGym instead
+   of `refused to connect`; the document response is 200; CSP is
+   `frame-ancestors 'self'`; `/api/health` remains healthy. The unbuilt local
+   patch and exact diagnosis are documented above.
 2. **Test Steps 2–4 from `DOCS.md`** (real accounts, Cloudflare Tunnel,
    AI connector) against the live install — see "Test coverage" above.
    Needs Matheus's own domain/Cloudflare decisions, so it wasn't done
    autonomously this session. Fix forward in this repo if anything breaks,
    same as Bugs 1–3.
-3. Add `opengym/icon.png` (128×128) and `opengym/logo.png` (250×100) — not
-   yet added, Store shows a generic icon without them.
-4. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
+3. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
    merges upstream: switch `opengym/Dockerfile`'s clone URL back to
    `https://gitlab.com/DuarteSantos8/opengym.git` and `OPENGYM_REF` back to
    `main` (or a release tag). Remove the `TEMPORARY` comments once done.
-5. Not before all of the above: consider whether to submit this for listing
+4. Not before all of the above: consider whether to submit this for listing
    in any curated Home Assistant add-on index. Ship as an unlisted personal
    repo first — this was an explicit "not doing yet" in the original plan.

@@ -1,7 +1,8 @@
 #!/usr/bin/with-contenv bashio
-# openGym's own web/nginx.conf.template, unchanged content — just rendered by hand
-# here instead of by the official nginx image's docker-entrypoint.d scripts, which
-# HA's base image doesn't ship.
+# Render openGym's web/nginx.conf.template by hand here instead of using the
+# official nginx image's docker-entrypoint.d scripts, which HA's base image
+# doesn't ship. The Dockerfile makes one packaging-only change to that template:
+# same-origin framing is allowed so Home Assistant Ingress can embed the UI.
 set -e
 
 export NGINX_PORT=8099
