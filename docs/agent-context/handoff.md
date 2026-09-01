@@ -8,8 +8,12 @@ unrelated context).
 
 Local repo at `~/Documents/Codex/2026-09-01/opengym-ha-app`, pushed (with
 Matheus's explicit go-ahead) to **https://github.com/mzspicoli/opengym-homeassistant**
-(public), branch `main`. Not yet added to a real Home Assistant instance —
-that's the immediate next step, in progress this same session.
+(public), branch `main`. **Installed and running on Matheus's real Home
+Assistant** (`home.picoli.eu`) as of this session — see "2026-09-01: real
+Supervisor test" below for the three real bugs that surfaced and were fixed
+against the actual Supervisor (none of them reproduced in Docker-only
+testing). One piece is still unconfirmed: the Ingress web UI in an actual
+browser — see that same section for what to check next.
 
 All files exist and are internally consistent (see root `README.md` for the
 map). Two independent real-Docker builds on the VPS (not just read-through)
@@ -98,18 +102,106 @@ above any technical concern.
   from memory) — the older `build.yaml`-based approach is being phased out
   per HA's own migration blog post.
 
+## 2026-09-01: real Supervisor test — three real bugs found and fixed
+
+Added the repo to Matheus's real Home Assistant (`home.picoli.eu`), installed
+openGym from the Store, and drove the whole thing to a running container.
+This is the test a plain `docker run` on a VPS could never do — it closes the
+"Verified" gap above (`bashio::config` reading real Supervisor-managed
+options). All three bugs below only exist against a real Supervisor; none of
+them reproduced in `mcp/scripts/rehearsal.mjs` or the earlier Docker testing,
+because those never go through the Supervisor's own options-validation layer.
+
+### Bug 1 — empty-string option defaults fail their own schema
+
+First install attempt: clicking **Start** failed immediately with
+`Configuração inválida: expected a URL` before the container even ran.
+`config.yaml`'s `options:` block defaulted `rp_id`, `origin`, `admin_uids`,
+`mcp_origin` to `""` — fine for the `str?` fields, but `origin`/`mcp_origin`
+were `url?`, and voluptuous's `url?` rejects `""` outright (it does not
+special-case blank-as-absent). Fixed by dropping the defaults for all four
+fields entirely (commit `8c6bbb1`) — the three `run` scripts already used
+`bashio::config.has_value`, which correctly treats a genuinely-absent option
+the same as never-configured, so no runtime code needed to change.
+
+### Bug 2 — the Configuration UI itself can't save blank optional URLs
+
+Even after Bug 1's fix, opening the app's own **Configuration** tab and
+clicking **Salvar** with the URL fields left blank (guest mode, the
+documented default) failed with the same `expected a URL` error. Root cause:
+the Supervisor's schema-driven Configuration form submits `""` for any field
+left blank rather than omitting the key — this is Supervisor UI behavior,
+not something `config.yaml` controls. `url?` never accepts `""`. Fixed by
+changing `origin`/`mcp_origin` from `url?` to `str?` (commit `aed3a9e`) — the
+actual URL shape is still validated where these values get used (openGym's
+own runtime, `@simplewebauthn`'s RP config), so nothing meaningful was lost.
+
+### Bug 3 — the option named "origin" specifically resists both fixes
+
+After Bug 2's fix, `mcp_origin` picked up `str?` immediately — confirmed via
+`ha apps info`, its schema entry changed from `format: url` to plain
+`type: string` right away. `origin`, edited identically in the same commit,
+did not: `ha apps info` kept showing `format: url` for it, unchanged, across
+every cache-busting method tried in sequence: `ha store update`,
+`ha store reload` (twice, including one that actually completed —
+`"Command completed successfully"` — not just timed out), a full
+`ha apps uninstall` + `ha apps install` cycle (fresh clone), and finally a
+complete `ha supervisor restart`. The GitHub API (not just the CDN-cached raw
+URL) confirmed the committed file already said `origin: str?` the whole
+time — this was not a git/push/CDN propagation problem. `mcp_origin`, an
+identically-shaped field edited in the very same commit, updated correctly
+every time. The most plausible explanation: the Supervisor treats an option
+literally named `origin` specially somewhere in its own validation or
+network layer (a CORS-adjacent reserved name), independent of what the
+add-on's own `config.yaml` schema declares. Rather than keep fighting an
+undocumented Supervisor behavior, renamed the option key to `public_url`
+(commit `5ad94cc`) — updated `config.yaml`, `translations/en.yaml`, and both
+`run` scripts that read it (`api/run`, `mcp/run`). User-facing behavior is
+identical: the Configuration tab still labels it "Public URL", and it still
+becomes the same `ORIGIN` env var both scripts already expected. This is
+purely a repackaging-side workaround; nothing in it should ever go upstream
+to openGym itself.
+
+### Confirmed working after all three fixes
+
+After uninstall + reinstall on the corrected `public_url` schema:
+`ha apps start 4c21d965_opengym` → `Command completed successfully`,
+`ha apps info` → `state: started`, `docker ps` → the container `Up` and
+staying up (not crash-looping). Inside the container:
+`s6-rc -a list` shows all real services (`api`, `mcp`, `web`, `media-init`,
+plus s6 bookkeeping) — confirming `bashio::config` genuinely read real
+Supervisor-managed options this time, which was the one thing no earlier
+test round could exercise. `wget` from inside the container to
+`http://127.0.0.1:8099/` returned openGym's actual `index.html` (title
+"openGym"), and `http://127.0.0.1:8099/api/health` returned
+`{"ok":true,"users":0}` — a real, freshly-initialized `db.json`, not a
+crash or a stub response. `curl -I` from outside the VPS to
+`https://home.picoli.eu/app/4c21d965_opengym` also returned `200`.
+
+### Not yet confirmed: the Ingress web UI in an actual browser
+
+Clicking **Abrir interface web** in a real browser session (through
+Chrome automation, not on Matheus's own LAN) produced a plain
+`home.picoli.eu refused to connect` — a connection-level failure, not an
+HTTP error page, and it reproduced consistently across three attempts
+(including one via a direct URL navigation that still resolved through the
+SPA router, `#/`). This is very unlikely to be an openGym-specific bug:
+`internal_url`/`external_url` are both unset on this HA instance (checked
+via `/api/config`), and the same-shaped `curl -I` from outside confirmed the
+underlying HTTP route is genuinely serving `200`. The most likely
+explanation is something in how this specific Cloudflare Tunnel setup
+proxies the Ingress iframe/WebSocket for external (non-LAN) sessions — a
+property of the tunnel, not of this add-on's packaging. **Needs
+confirmation from Matheus's own device** (ideally on the home LAN, where
+Ingress traffic doesn't have to cross the tunnel at all) before treating
+this as closed. If it turns out to be real and openGym-specific, the
+likeliest place to look is `web/nginx.conf.template`'s handling of the
+`X-Ingress-Path` header Supervisor injects for Ingress requests.
+
 ## Next steps, in order
 
-1. **Real HA test (in progress — handed to a Chrome-capable session)** —
-   add `https://github.com/mzspicoli/opengym-homeassistant` as a repository
-   in Matheus's real Home Assistant instance, install openGym, walk through
-   its Configuration tab and `DOCS.md` (Steps 1–4: guest mode, real
-   accounts, Cloudflare Tunnel, optional AI connector) against his actual
-   setup. This is the one thing a plain `docker run` test on a VPS could not
-   confirm — see "Verified" above for exactly what gap this closes
-   (`bashio::config` reading real options). Fix forward in this repo (commit
-   + push to `main`) if anything breaks; this is a real continuation of the
-   work, not a one-off smoke test.
+1. **Confirm the Ingress web UI from Matheus's own device** (see directly
+   above) — the one remaining unconfirmed piece of the real-Supervisor test.
 2. Add `opengym/icon.png` (128×128) and `opengym/logo.png` (250×100) — not
    yet added, Store shows a generic icon without them.
 3. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
