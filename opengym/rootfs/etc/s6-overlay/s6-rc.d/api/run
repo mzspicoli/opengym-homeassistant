@@ -1,0 +1,26 @@
+#!/usr/bin/with-contenv bashio
+# openGym's api/server.js, unchanged — options here map 1:1 to the env vars
+# documented in the upstream repo's docs/SELF_HOSTING.md and .env.example.
+set -e
+
+export NODE_ENV=production
+export PORT=3000
+export DATA_DIR=/data
+export RP_NAME="$(bashio::config 'rp_name')"
+
+if bashio::config.has_value 'rp_id'; then export RP_ID="$(bashio::config 'rp_id')"; fi
+if bashio::config.has_value 'origin'; then export ORIGIN="$(bashio::config 'origin')"; fi
+if bashio::config.has_value 'admin_uids'; then export ADMIN_UIDS="$(bashio::config 'admin_uids')"; fi
+if bashio::config.true 'invite_only'; then export INVITE_ONLY=1; fi
+if ! bashio::config.true 'allow_guest'; then export ALLOW_GUEST=0; fi
+export SESSION_DAYS="$(bashio::config 'session_days')"
+
+# Only set when MCP is actually running, so api/mcp-proxy.js's own "not enabled by
+# this installation" 503 is what Settings → MCP / AI sees, rather than a
+# connection-refused 502 to a service that was never started.
+if bashio::config.true 'mcp_enabled'; then
+    export MCP_INTERNAL_URL="http://127.0.0.1:3001"
+fi
+
+cd /opt/opengym/api
+exec node server.js

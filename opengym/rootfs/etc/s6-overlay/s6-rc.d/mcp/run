@@ -1,0 +1,31 @@
+#!/usr/bin/with-contenv bashio
+# openGym's mcp/src/http.js, unchanged. Idles instead of starting when mcp_enabled
+# is off, rather than exiting (which s6 would just crash-loop and spam the log).
+#
+# Requires the two-hostname remote-MCP design (upstream MR !86 — not merged as of
+# this writing; see this repo's README). If OPENGYM_REF predates that merge, the
+# nginx template this image ships won't have the /mcp-authorize route this expects,
+# and mcp_enabled will not work even though the service starts.
+set -e
+
+if ! bashio::config.true 'mcp_enabled'; then
+    exec sleep infinity
+fi
+
+if ! bashio::config.has_value 'mcp_origin'; then
+    bashio::log.error "mcp_enabled is on but mcp_origin is not set — see this app's DOCS.md."
+    exec sleep infinity
+fi
+
+ORIGIN="$(bashio::config 'origin')"
+MCP_ORIGIN="$(bashio::config 'mcp_origin')"
+
+export PORT=3001
+export OPENGYM_DATA=/data
+export OAUTH_DATA=/data/mcp-oauth
+export OAUTH_ISSUER="${MCP_ORIGIN}"
+export OAUTH_AUTHORIZE_URL="${ORIGIN}/mcp-authorize"
+export MCP_RESOURCE="${MCP_ORIGIN}/mcp"
+
+cd /opt/opengym/mcp
+exec node src/http.js

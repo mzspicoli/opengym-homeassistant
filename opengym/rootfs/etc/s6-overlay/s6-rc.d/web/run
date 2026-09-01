@@ -1,0 +1,20 @@
+#!/usr/bin/with-contenv bashio
+# openGym's own web/nginx.conf.template, unchanged content — just rendered by hand
+# here instead of by the official nginx image's docker-entrypoint.d scripts, which
+# HA's base image doesn't ship.
+set -e
+
+export NGINX_PORT=8099
+export BACKEND=127.0.0.1
+export PORT=3000
+export CF_CONNECTING_IP=""
+
+# Alpine's nginx package (unlike the official nginx:alpine image this template was
+# written for) includes conf.d/*.conf at the ROOT context, not inside http{} — a
+# bare `server{}` block there fails with "server directive is not allowed here".
+# It includes http.d/*.conf from inside http{} instead; that's where this goes.
+envsubst '${NGINX_PORT} ${BACKEND} ${PORT} ${CF_CONNECTING_IP}' \
+    < /etc/nginx/templates/default.conf.template \
+    > /etc/nginx/http.d/default.conf
+
+exec nginx -g "daemon off;"

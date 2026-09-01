@@ -1,0 +1,41 @@
+---
+configuration:
+  rp_id:
+    name: Passkey hostname
+    description: >-
+      Your web address without https://, e.g. gym.example.com. Only needed
+      for real accounts — leave blank to use Guest mode. See the docs above,
+      Step 2.
+  origin:
+    name: Public URL
+    description: >-
+      Your full web address, e.g. https://gym.example.com. Should match the
+      Passkey hostname above.
+  rp_name:
+    name: Display name
+    description: The name shown when someone signs in.
+  admin_uids:
+    name: Admin user IDs
+    description: >-
+      Only if you want an admin dashboard — see the docs above,
+      "Make yourself an administrator." Leave blank otherwise.
+  invite_only:
+    name: Require an invite code to sign up
+    description: New people need a code from an admin before they can join.
+  allow_guest:
+    name: Allow Guest mode
+    description: Let visitors try the app without creating an account.
+  session_days:
+    name: Stay signed in for (days)
+    description: How many days before someone has to sign in again.
+  mcp_enabled:
+    name: Enable AI connector
+    description: >-
+      Optional — lets an AI assistant like Claude or ChatGPT read your
+      workouts when you ask it to. See the docs above, Step 4, before
+      turning this on.
+  mcp_origin:
+    name: AI connector address
+    description: >-
+      A second web address, different from the Public URL above, e.g.
+      https://gym-ai.example.com. Required when Enable AI connector is on.

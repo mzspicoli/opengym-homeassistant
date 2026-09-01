@@ -1,0 +1,46 @@
+---
+name: openGym
+version: "0.1.0"
+slug: opengym
+description: >-
+  Self-hosted gym & body-weight tracker — routines, workouts, supersets,
+  cardio, weight/progress, passkey login. Your data, your server.
+url: "https://github.com/mzspicoli/opengym-homeassistant/tree/main/opengym"
+image: "ghcr.io/mzspicoli/opengym"
+init: false
+arch:
+  - amd64
+  - aarch64
+startup: services
+boot: auto
+ingress: true
+ingress_port: 8099
+panel_icon: mdi:dumbbell
+ports:
+  8099/tcp: 8099
+  3001/tcp: null
+ports_description:
+  8099/tcp: "openGym web (also reachable directly, outside ingress, e.g. behind your own Cloudflare Tunnel)"
+  3001/tcp: "MCP endpoint (only listens when mcp_enabled is on) — point a second tunnel hostname at this, never the same one as 8099"
+map:
+  - data:rw
+options:
+  rp_id: ""
+  origin: ""
+  rp_name: openGym
+  admin_uids: ""
+  invite_only: false
+  allow_guest: true
+  session_days: 90
+  mcp_enabled: false
+  mcp_origin: ""
+schema:
+  rp_id: str?
+  origin: url?
+  rp_name: str
+  admin_uids: str?
+  invite_only: bool
+  allow_guest: bool
+  session_days: int(1,365)
+  mcp_enabled: bool
+  mcp_origin: url?

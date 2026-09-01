@@ -1,0 +1,73 @@
+# Repackages upstream openGym (gitlab.com/DuarteSantos8/opengym) — a two-container
+# (web+api) + optional MCP app — as a single Home Assistant App image, three s6
+# services sharing one process namespace and one /data. Nothing in openGym's own
+# source changes; this only adapts how it's built and supervised.
+#
+# OPENGYM_REF pins the upstream ref this image is built from. TEMPORARY default:
+# the validated commit from MR !86 (gitlab.com/DuarteSantos8/opengym/-/merge_requests/86),
+# not `main` — `main` still only has the old stdio-only MCP (no mcp/src/http.js,
+# no api/state-store.js), so this image cannot build against it at all yet, MCP
+# service aside. Once !86 merges, change this default to `main` (or a release tag)
+# and drop this comment.
+ARG BUILD_FROM
+ARG OPENGYM_REF=ebd49888f53e56806c11e4ce4dae2c0b6aabd619
+
+FROM node:22-alpine AS source
+ARG OPENGYM_REF
+RUN apk add --no-cache git
+WORKDIR /src
+# TEMPORARY: the default OPENGYM_REF above only exists on the fork (MR !86 isn't merged
+# yet), not upstream — switch this URL back to https://gitlab.com/DuarteSantos8/opengym.git
+# once it is. Full clone + checkout (not --depth 1 --branch) because the default ref is a
+# raw commit SHA, not a branch/tag name a shallow clone can fetch directly.
+RUN git clone https://gitlab.com/mzspicoli/opengym.git . && git checkout "${OPENGYM_REF}"
+
+# Static frontend build — arch-independent output, so this always runs on the
+# build host's native node:22-alpine rather than under aarch64 QEMU emulation.
+FROM source AS frontend-build
+WORKDIR /src/frontend
+RUN npm ci 2>/dev/null || npm install
+RUN npm run build
+
+FROM source AS api-deps
+WORKDIR /src/api
+RUN npm install --omit=dev && npm cache clean --force
+
+FROM source AS mcp-deps
+WORKDIR /src/mcp
+RUN npm ci --omit=dev && npm cache clean --force
+
+FROM ${BUILD_FROM}
+
+# HA base images are Alpine but ship no app runtime or web server by default.
+# Plain apk nodejs/npm (not a pinned node:22-alpine copy-in) — openGym's own
+# dependencies are pure JS (see CONTRIBUTING.md's dependency-light constraint),
+# so there is nothing here that's sensitive to the exact Node minor version.
+RUN apk add --no-cache nodejs npm nginx git gettext
+
+# --- web (frontend + nginx) ---
+COPY --from=frontend-build /src/frontend/dist /usr/share/nginx/html
+COPY --from=source /src/web/nginx.conf.template /etc/nginx/templates/default.conf.template
+# Single-container: every process is 127.0.0.1, not a separate compose service name.
+RUN sed -i 's/mcp:3001/127.0.0.1:3001/' /etc/nginx/templates/default.conf.template
+# Alpine's nginx package ships its own welcome-page vhost here; remove it so it
+# can't conflict with (or shadow) the one rendered at container start.
+RUN rm -f /etc/nginx/http.d/default.conf
+
+# --- api ---
+COPY --from=source /src/api/*.js /opt/opengym/api/
+COPY --from=api-deps /src/api/node_modules /opt/opengym/api/node_modules
+
+# --- mcp (optional, gated by the mcp_enabled option at runtime) ---
+# api/state-store.js is already covered above by the api/*.js wildcard — mcp/src
+# imports it via a relative ../../api path, so it needs to land at that same spot
+# relative to mcp/src, which /opt/opengym/{api,mcp}/ as siblings already gives it.
+COPY --from=source /src/mcp/src /opt/opengym/mcp/src
+COPY --from=source /src/frontend/src /opt/opengym/frontend/src
+COPY --from=mcp-deps /src/mcp/node_modules /opt/opengym/mcp/node_modules
+
+COPY rootfs /
+
+LABEL \
+    io.hass.type="addon" \
+    io.hass.arch="amd64|aarch64"
