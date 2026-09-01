@@ -198,16 +198,40 @@ this as closed. If it turns out to be real and openGym-specific, the
 likeliest place to look is `web/nginx.conf.template`'s handling of the
 `X-Ingress-Path` header Supervisor injects for Ingress requests.
 
+## Test coverage — what's confirmed vs. still untested
+
+Mapped against `opengym/DOCS.md`'s own steps, against the real Supervisor
+install on `home.picoli.eu` (slug `4c21d965_opengym`):
+
+| Step | What it is | Status |
+|---|---|---|
+| Step 1 — guest mode | Click Start, open from sidebar, use with no config | **Backend confirmed** (container up, s6 services running, `/` and `/api/health` respond for real from inside and outside the host). **Browser/UI not confirmed** — see "Not yet confirmed" above (Ingress `refused to connect` in the remote Chrome session; needs Matheus's own device, ideally on the LAN). |
+| Step 2 — real accounts (Passkey hostname / Public URL) | Fill in `rp_id` + `public_url` in Configuration, restart | **Not tested at all.** Both fields are still blank on the live install (guest mode only, from Bug 1–3 debugging). Nobody has entered a real hostname, restarted, and confirmed the sign-in screen actually offers "Create a passkey." |
+| Step 3 — Cloudflare Tunnel | Install Cloudflared App, point a hostname at port 8099 | **Not tested at all.** Matheus already has Cloudflare Tunnel infra for other services (see his own reference memory), but nothing has been wired up for openGym specifically this session. |
+| Step 4 — AI connector (MCP) | Second hostname, port 3001, `mcp_enabled` + `mcp_origin` | **Not tested at all.** `mcp_enabled` is still `false` on the live install. Separately, note the `TEMPORARY` `OPENGYM_REF` pin (see "Next steps" #3) means this image is built from the `feat/mcp-connections-ui` fork commit specifically so MCP *can* work once configured — but that code path itself hasn't been exercised inside this HA packaging yet. |
+| Optional: make yourself admin | Set `admin_uids` in Configuration | **Not tested.** Field is blank. |
+
+In short: the one thing this session set out to close — does `bashio::config`
+actually work against a real Supervisor — **is closed** (Bugs 1–3 and the
+"Confirmed working" section above). Everything past Step 1 in `DOCS.md` is
+still exactly as untested as before this session; only the guest-mode path
+has real backend evidence behind it.
+
 ## Next steps, in order
 
 1. **Confirm the Ingress web UI from Matheus's own device** (see directly
-   above) — the one remaining unconfirmed piece of the real-Supervisor test.
-2. Add `opengym/icon.png` (128×128) and `opengym/logo.png` (250×100) — not
+   above) — the one remaining unconfirmed piece of Step 1.
+2. **Test Steps 2–4 from `DOCS.md`** (real accounts, Cloudflare Tunnel,
+   AI connector) against the live install — see "Test coverage" above.
+   Needs Matheus's own domain/Cloudflare decisions, so it wasn't done
+   autonomously this session. Fix forward in this repo if anything breaks,
+   same as Bugs 1–3.
+3. Add `opengym/icon.png` (128×128) and `opengym/logo.png` (250×100) — not
    yet added, Store shows a generic icon without them.
-3. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
+4. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
    merges upstream: switch `opengym/Dockerfile`'s clone URL back to
    `https://gitlab.com/DuarteSantos8/opengym.git` and `OPENGYM_REF` back to
    `main` (or a release tag). Remove the `TEMPORARY` comments once done.
-4. Not before all of the above: consider whether to submit this for listing
+5. Not before all of the above: consider whether to submit this for listing
    in any curated Home Assistant add-on index. Ship as an unlisted personal
    repo first — this was an explicit "not doing yet" in the original plan.
