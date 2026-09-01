@@ -1,16 +1,19 @@
 ---
 configuration:
   rp_id:
-    name: Passkey hostname
+    name: Passkey hostname (optional)
     description: >-
-      Your web address without https://, e.g. gym.example.com. Only needed
-      for real accounts — leave blank to use Guest mode. See the docs above,
-      Step 2.
+      Leave blank to auto-detect from Home Assistant's own address (Nabu
+      Casa or your external_url, if set) — that's right for most people.
+      Set this only if you want a separate domain/Cloudflare Tunnel instead,
+      e.g. gym.example.com (without https://). See the docs above, Step 2.
   public_url:
-    name: Public URL
+    name: Public URL (optional)
     description: >-
-      Your full web address, e.g. https://gym.example.com. Should match the
-      Passkey hostname above.
+      Leave blank to auto-detect from Home Assistant's own address — see
+      Passkey hostname above. Only set this (matching that field, with
+      https://, e.g. https://gym.example.com) if you're using a separate
+      domain/Cloudflare Tunnel.
   rp_name:
     name: Display name
     description: The name shown when someone signs in.

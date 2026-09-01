@@ -3,25 +3,48 @@
 # is off, rather than exiting (which s6 would just crash-loop and spam the log).
 #
 # mcp_origin is optional. Most installs should leave it blank: MCP then shares
-# public_url's hostname, and the mcp-shared.conf nginx include (this repo's own
-# file, not upstream's) proxies the rest of the MCP route surface onto that same
-# origin — no second tunnel/hostname to set up. A separate mcp_origin is only
-# needed for installs that put an access-control layer in front of public_url
-# (Cloudflare Access or similar): MCP is machine-to-machine and can't complete
-# that kind of interactive login redirect, so it needs its own hostname left
-# out of that layer. See this app's DOCS.md.
+# public_url's hostname (explicit, or auto-detected below — same as api/run),
+# and the mcp-shared.conf nginx include (this repo's own file, not upstream's)
+# proxies the rest of the MCP route surface onto that same origin — no second
+# tunnel/hostname to set up. A separate mcp_origin is only needed for installs
+# that put an access-control layer in front of public_url (Cloudflare Access
+# or similar): MCP is machine-to-machine and can't complete that kind of
+# interactive login redirect, so it needs its own hostname left out of that
+# layer. See this app's DOCS.md.
 set -e
 
 if ! bashio::config.true 'mcp_enabled'; then
     exec sleep infinity
 fi
 
-if ! bashio::config.has_value 'public_url'; then
-    bashio::log.error "mcp_enabled is on but public_url is not set — MCP needs a real hostname to issue OAuth tokens for. See this app's DOCS.md."
+# Same Home-Assistant-external_url fallback as api/run — see the comment
+# there for why (requires homeassistant_api: true in config.yaml).
+if bashio::config.has_value 'public_url'; then
+    ORIGIN="$(bashio::config 'public_url')"
+    ORIGIN_IS_EXPLICIT=1
+else
+    ORIGIN="$(bashio::api.supervisor GET /core/api/config false '.external_url' 2>/dev/null || true)"
+    [ "${ORIGIN}" = "null" ] && ORIGIN=""
+    ORIGIN_IS_EXPLICIT=0
+fi
+
+if [ -z "${ORIGIN}" ]; then
+    bashio::log.error "mcp_enabled is on but no public_url is set and Home Assistant has no external_url configured either — MCP needs a real hostname to issue OAuth tokens for. See this app's DOCS.md."
     exec sleep infinity
 fi
 
-ORIGIN="$(bashio::config 'public_url')"
+if [ "${ORIGIN_IS_EXPLICIT}" = "0" ]; then
+    # Ingress-based URLs (Nabu Casa Remote UI included) require an
+    # authenticated Home Assistant session to reach at all — fine for a
+    # human in a browser, not for an MCP client making bearer-token API
+    # calls. This isn't a hard failure (it may still work, e.g. if this
+    # resolved to a real custom external_url rather than Nabu Casa), just a
+    # heads-up: if MCP tool calls fail to connect, set up a dedicated
+    # external hostname for it (the Cloudflared App, see DOCS.md Step 3/4)
+    # instead of relying on this auto-detected address.
+    bashio::log.warning "mcp_enabled is on but public_url isn't set explicitly — using Home Assistant's own external_url (${ORIGIN}). If MCP clients can't connect, this address likely needs to be reachable without an HA login (e.g. via the Cloudflared App with its own hostname) — see this app's DOCS.md Step 4."
+fi
+
 if bashio::config.has_value 'mcp_origin'; then
     MCP_ORIGIN="$(bashio::config 'mcp_origin')"
 else

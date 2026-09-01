@@ -13,33 +13,46 @@ Home Assistant; nothing about openGym itself was changed.
 
 1. Click **Start**.
 2. Open openGym from the Home Assistant sidebar.
-3. You're in, in **Guest mode** — everything you log stays only in this
-   browser, nothing is sent anywhere else.
+3. You're in. **Continue without account** keeps what you log in this
+   browser only, nothing sent anywhere else — that's still there and always
+   will be, whether or not you do Step 2.
 
-That's enough to try it out, or for one person browsing locally. Everything
-below is only needed if more than one person will use it, or if you want to
-open it from outside the house.
+That's enough for one person browsing locally. Step 2 below is only needed
+if more than one person will use it, or if you want accounts that follow you
+between devices.
 
-## Step 2 — Give people real accounts (optional)
+## Step 2 — Real accounts that follow you between devices (optional)
 
-Guest mode keeps data in one browser only. For real accounts that follow you
-between devices, openGym needs a proper web address (like a website has) —
-this is a rule of the passkey login technology itself, not something this
-App can shortcut.
+**As of version 0.1.3, this needs no setup for most people.** Real accounts
+use passkeys, which are tied to a real web address (like a website has) —
+that's a rule of the passkey technology itself, not something this App can
+shortcut. But this App now finds that address for you automatically: if
+Home Assistant already has a Nabu Casa subscription (Remote UI) or its own
+`external_url` configured, sign-in already offers "Create a passkey" with no
+Configuration changes at all. Just open openGym and try it.
 
-1. Pick a web address you own, for example `gym.yourname.com`. If you don't
-   have one, buying a domain name from any registrar and pointing it at your
-   home takes a few minutes and usually costs very little.
-2. Follow **Step 3** below to make that address reach your Home Assistant,
-   without opening any ports on your router.
-3. Come back here, open this App's **Configuration** tab, and fill in:
-   - **Passkey hostname**: `gym.yourname.com`
-   - **Public URL**: `https://gym.yourname.com`
-4. Restart the App. Open it at that address — sign-in now offers "Create a
-   passkey."
+**If sign-in doesn't offer a passkey option**, Home Assistant has no
+external address of its own yet. You have two choices:
 
-Changing the hostname later breaks existing passkeys, so pick it before
-people sign up for real.
+- Set one up for Home Assistant itself (Nabu Casa, or your own domain) —
+  once that exists, openGym picks it up automatically, and so does anything
+  else in Home Assistant that needs it.
+- Or give openGym its own separate address, independent of Home Assistant:
+  1. Pick a web address you own, for example `gym.yourname.com`. If you
+     don't have one, buying a domain name from any registrar and pointing
+     it at your home takes a few minutes and usually costs very little.
+  2. Follow **Step 3** below to make that address reach openGym, without
+     opening any ports on your router.
+  3. Come back here, open this App's **Configuration** tab, turn on **Mostrar
+     opções de configuração opcionais não utilizadas** (Show unused optional
+     configuration options), and fill in:
+     - **Passkey hostname**: `gym.yourname.com`
+     - **Public URL**: `https://gym.yourname.com`
+  4. Restart the App. Open it at that address — sign-in now offers "Create a
+     passkey."
+
+Changing the address later (auto-detected or manual) breaks existing
+passkeys, so settle on one before people sign up for real.
 
 ## Step 3 — Reach it from outside your home (Cloudflare Tunnel)
 
@@ -90,12 +103,17 @@ openGym can let an AI chat app (like Claude or ChatGPT) look up your
 workouts when you ask it to, if you turn this on. Skip this section
 entirely unless you specifically want that.
 
-For almost everyone, this is all it takes — no second address, no extra
-Cloudflare Tunnel entry:
-
 - On this App's **Configuration** tab, turn on **Enable AI connector**.
 - Leave **AI connector address** blank.
 - Restart the App.
+
+**Important if you're relying on Step 2's automatic address** (Nabu Casa or
+Home Assistant's own `external_url`, no Configuration changes made): that
+kind of address normally requires being logged into Home Assistant to reach
+at all, which works fine for you in a browser but not for an AI service
+making direct API calls. If the AI connector shows "connected" but tool
+calls fail, that's why — give it its own dedicated address instead (Step 3,
+then set **AI connector address** to that address).
 
 **Only if** your address from Step 2 sits behind an access-control layer
 (Cloudflare Access or a similar login wall in front of the whole domain),

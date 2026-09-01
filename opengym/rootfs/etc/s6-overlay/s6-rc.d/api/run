@@ -8,8 +8,31 @@ export PORT=3000
 export DATA_DIR=/data
 export RP_NAME="$(bashio::config 'rp_name')"
 
-if bashio::config.has_value 'rp_id'; then export RP_ID="$(bashio::config 'rp_id')"; fi
-if bashio::config.has_value 'public_url'; then export ORIGIN="$(bashio::config 'public_url')"; fi
+# Default to whatever address Home Assistant itself is already reachable at
+# (Nabu Casa Remote UI, or your own external_url if you've set one) — no
+# public_url needed for the common case. Requires homeassistant_api: true
+# (see config.yaml) so bashio::api.supervisor can reach Core's own /api/config
+# through the Supervisor proxy; HA_EXTERNAL_URL is "null" (the literal jq
+# string, not empty) when nothing is configured there either — same
+# guest-mode fallback as before in that case.
+if bashio::config.has_value 'public_url'; then
+    ORIGIN="$(bashio::config 'public_url')"
+else
+    ORIGIN="$(bashio::api.supervisor GET /core/api/config false '.external_url' 2>/dev/null || true)"
+    [ "${ORIGIN}" = "null" ] && ORIGIN=""
+fi
+
+if [ -n "${ORIGIN}" ]; then
+    export ORIGIN
+    if bashio::config.has_value 'rp_id'; then
+        export RP_ID="$(bashio::config 'rp_id')"
+    else
+        # WebAuthn's rp_id is the bare hostname only (no scheme/port/path) —
+        # derive it from whichever ORIGIN was resolved above.
+        export RP_ID="$(echo "${ORIGIN}" | sed -E 's#^[a-zA-Z]+://##; s#[/:].*##')"
+    fi
+fi
+
 if bashio::config.has_value 'admin_uids'; then export ADMIN_UIDS="$(bashio::config 'admin_uids')"; fi
 if bashio::config.true 'invite_only'; then export INVITE_ONLY=1; fi
 if ! bashio::config.true 'allow_guest'; then export ALLOW_GUEST=0; fi
