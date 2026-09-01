@@ -32,11 +32,18 @@ options:
   mcp_enabled: false
 schema:
   rp_id: str?
-  origin: url?
+  # url? (not str?) rejects the app's own Configuration form: the Supervisor's
+  # schema-driven options UI submits "" for any field left blank rather than
+  # omitting the key, and voluptuous's url? does not accept "" as "absent" —
+  # it fails the whole save with "expected a URL" even though blank is this
+  # option's own documented default (Step 1, guest mode). str? accepts "";
+  # the actual URL shape is validated where it's used (openGym's own runtime,
+  # and indirectly by @simplewebauthn's RP config), same as origin already was.
+  origin: str?
   rp_name: str
   admin_uids: str?
   invite_only: bool
   allow_guest: bool
   session_days: int(1,365)
   mcp_enabled: bool
-  mcp_origin: url?
+  mcp_origin: str?
