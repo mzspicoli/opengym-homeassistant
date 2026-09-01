@@ -6,10 +6,10 @@ unrelated context).
 
 ## Current state
 
-Repo built locally at `~/Documents/Codex/2026-09-01/opengym-ha-app` — **not
-yet `git init`'d or pushed anywhere.** That's a deliberate pause point: ask
-Matheus before creating/pushing to a public GitHub repo, per the general
-"confirm before publishing" rule, not a technical blocker.
+Local repo at `~/Documents/Codex/2026-09-01/opengym-ha-app`, pushed (with
+Matheus's explicit go-ahead) to **https://github.com/mzspicoli/opengym-homeassistant**
+(public), branch `main`. Not yet added to a real Home Assistant instance —
+that's the immediate next step, in progress this same session.
 
 All files exist and are internally consistent (see root `README.md` for the
 map). Two independent real-Docker builds on the VPS (not just read-through)
@@ -100,21 +100,22 @@ above any technical concern.
 
 ## Next steps, in order
 
-1. **Real HAOS test** — install this repo on an actual Home Assistant
-   Supervisor instance (spare hardware, a VM, or the Supervisor dev
-   container) and confirm: the ingress panel loads openGym, the
-   Configuration tab's options actually reach the three services (the one
-   gap plain `docker run` couldn't close), and `mcp_enabled` genuinely
-   starts/stops the `mcp` service.
+1. **Real HA test (in progress — handed to a Chrome-capable session)** —
+   add `https://github.com/mzspicoli/opengym-homeassistant` as a repository
+   in Matheus's real Home Assistant instance, install openGym, walk through
+   its Configuration tab and `DOCS.md` (Steps 1–4: guest mode, real
+   accounts, Cloudflare Tunnel, optional AI connector) against his actual
+   setup. This is the one thing a plain `docker run` test on a VPS could not
+   confirm — see "Verified" above for exactly what gap this closes
+   (`bashio::config` reading real options). Fix forward in this repo (commit
+   + push to `main`) if anything breaks; this is a real continuation of the
+   work, not a one-off smoke test.
 2. Add `opengym/icon.png` (128×128) and `opengym/logo.png` (250×100) — not
    yet added, Store shows a generic icon without them.
-3. Ask Matheus before `git init` + push to
-   `github.com/mzspicoli/opengym-homeassistant` (or wherever he wants it) — not
-   done automatically.
-4. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
+3. Once [MR !86](https://gitlab.com/DuarteSantos8/opengym/-/merge_requests/86)
    merges upstream: switch `opengym/Dockerfile`'s clone URL back to
    `https://gitlab.com/DuarteSantos8/opengym.git` and `OPENGYM_REF` back to
    `main` (or a release tag). Remove the `TEMPORARY` comments once done.
-5. Not before all of the above: consider whether to submit this for listing
+4. Not before all of the above: consider whether to submit this for listing
    in any curated Home Assistant add-on index. Ship as an unlisted personal
    repo first — this was an explicit "not doing yet" in the original plan.
