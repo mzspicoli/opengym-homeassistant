@@ -507,3 +507,16 @@ unverified.
 10. Not before all of the above: consider whether to submit this for listing
     in any curated Home Assistant add-on index. Ship as an unlisted personal
     repo first — this was an explicit "not doing yet" in the original plan.
+
+## MR !88 conflict resolution — 2026-09-04
+
+MR !88 (`feat/mcp-remote-hostname`) was rebased onto the current upstream
+`main` and force-updated safely with `--force-with-lease` from source SHA
+`d1e7736` to `80f8d8a`. The merge contained the MCP remote-connection changes,
+current CI/API hardening, Coach routes, MCP settings screen, and all locale
+updates. Local validation passed: frontend build; the two synchronization and
+pt-BR locale test files (15/15); MCP suite (72/72) plus plain-node loadability;
+and API suite (150/150). GitLab accepted the push and started pipeline
+2820252082; its cached merge status still says `cannot_be_merged_recheck` /
+`conflict` while `has_conflicts` is false, so re-read after the pipeline and
+GitLab mergeability recomputation complete.
