@@ -538,3 +538,13 @@ status and mergeability before treating the MR as ready for review.
 Final readback: pipeline `2822772258` passed (91 seconds, 84.65% reported
 coverage) and GitLab now reports MR !88 as `can_be_merged` / `mergeable`, with
 no conflicts. It awaits maintainer review/merge only.
+
+### Upstream advanced again — 2026-09-05
+
+Upstream `main` advanced to v1.3.3 (`3707a21`) after the preceding readback,
+which made MR !88 conflict again. The branch was rebased a second time and
+published at `7fd888e`, preserving v1.3.3's new workout/profile fields and
+translations. Validation on that base passed: frontend 1216 tests plus build,
+MCP 85 tests plus Node import check, and API 152 tests. GitLab currently
+reports `can_be_merged` / `mergeable` and no conflicts; pipeline `2822782722`
+is still running at this checkpoint. An MR note records the rebase and tests.
