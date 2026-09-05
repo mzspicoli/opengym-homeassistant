@@ -520,3 +520,17 @@ and API suite (150/150). GitLab accepted the push and started pipeline
 2820252082; its cached merge status still says `cannot_be_merged_recheck` /
 `conflict` while `has_conflicts` is false, so re-read after the pipeline and
 GitLab mergeability recomputation complete.
+
+### Follow-up after upstream v1.3.2 / MR !89 merge — 2026-09-05
+
+MR !89 merged upstream as part of `main` v1.3.2 (`cf46301`). MR !88 was
+then rebased again onto that exact target and force-updated with
+`--force-with-lease` to `e27f8de`. The upstream review's three requests are
+now addressed: the private production handoff was removed from the product
+branch; `docs/SELF_HOSTING.md` states the safe one-reload upgrade path for
+existing clients when `MCP_INTERNAL_URL` enables revisioned writes; and the
+branch has zero diverged commits from `main`. Local validation after that
+rebase passed: frontend 1134 tests and build, MCP 85 tests plus Node import
+check, API 152 tests. A concise response was posted on MR !88. GitLab's new
+pipeline is `2822772258`; at handoff it was newly created, so check its final
+status and mergeability before treating the MR as ready for review.
