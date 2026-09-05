@@ -548,3 +548,24 @@ translations. Validation on that base passed: frontend 1216 tests plus build,
 MCP 85 tests plus Node import check, and API 152 tests. GitLab currently
 reports `can_be_merged` / `mergeable` and no conflicts; pipeline `2822782722`
 is still running at this checkpoint. An MR note records the rebase and tests.
+
+### Production/version audit — 2026-09-05
+
+Read-only verification in the authenticated Home Assistant UI confirms that
+the live `openGym` add-on is **0.1.3** and running.  That matches this
+repository's current manifest, so the add-on packaging itself is not behind.
+
+The image's embedded openGym source is deliberately still pinned to fork
+commit `22e80b8` (2026-09-01, the secure-remote-connections work).  Upstream
+`DuarteSantos8/opengym:main` is now v1.3.3 at `3707a21` (2026-09-05), with
+**155 commits** after that pin.  This is a material product gap: it includes
+the v1.3.2/v1.3.3 releases and the newly merged workout/history/favourites/
+in-app-update work, including MR !89's timer-flash change.
+
+Do **not** simply repin production to upstream `main` yet: MR !88's
+two-hostname MCP/OAuth work is still unmerged upstream, and the current fork
+pin carries it.  Once !88 is merged, replace the temporary fork/pin with a
+tested upstream release/tag, validate a staged upgrade with the existing
+configuration and passkey data, and only then update the live add-on.  The
+prior version bump required an uninstall/reinstall and exposed a persistence
+gotcha, so a blind production update is not acceptable.
