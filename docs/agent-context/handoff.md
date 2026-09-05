@@ -534,3 +534,7 @@ rebase passed: frontend 1134 tests and build, MCP 85 tests plus Node import
 check, API 152 tests. A concise response was posted on MR !88. GitLab's new
 pipeline is `2822772258`; at handoff it was newly created, so check its final
 status and mergeability before treating the MR as ready for review.
+
+Final readback: pipeline `2822772258` passed (91 seconds, 84.65% reported
+coverage) and GitLab now reports MR !88 as `can_be_merged` / `mergeable`, with
+no conflicts. It awaits maintainer review/merge only.
