@@ -1,7 +1,7 @@
 # Agent context — opengym-ha-app
 
-Shared memory for whichever agent (Claude Code, Codex, or Matheus by hand)
-touches this repo next. Per the hybrid-memory protocol in `~/CLAUDE.md`, this
+Shared memory for whichever agent (Claude Code, or Matheus by hand)
+touches this repo next. Per the shared-memory protocol in `~/CLAUDE.md`, this
 directory — not chat history — is the source of truth for durable decisions.
 
 - **[handoff.md](handoff.md)** — current state, what's proven working, what's
