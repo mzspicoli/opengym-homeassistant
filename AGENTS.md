@@ -1,6 +1,6 @@
 # Agent entry point
 
-Shared context for any agent (Claude Code, Codex, or otherwise) working in
+Shared context for any agent (Claude Code or otherwise) working in
 this repo lives in [`docs/agent-context/`](docs/agent-context/README.md) —
 read that before making changes, and update
 [`docs/agent-context/handoff.md`](docs/agent-context/handoff.md) before
